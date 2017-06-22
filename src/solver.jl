@@ -1,5 +1,8 @@
 export KatanaSolver
 
+"""
+docs go here
+"""
 type KatanaSolver <: MathProgBase.AbstractMathProgSolver
     lp_solver::MathProgBase.AbstractMathProgSolver
 end

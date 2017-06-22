@@ -1,4 +1,7 @@
 
+"""
+docs go here
+"""
 type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     lp_solver::MathProgBase.AbstractMathProgSolver
     linear_model::Union{Void,JuMP.Model}
