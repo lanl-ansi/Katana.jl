@@ -28,6 +28,7 @@ function MathProgBase.loadproblem!(
 
     # by convention, "x" variables can be the original variables and 
     # "y" variables can be auxiliary variables
+    # a convention along these lines will help with filtering later
 
     if MathProgBase.isobjlinear(d)
         # add to model

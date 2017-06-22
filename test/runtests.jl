@@ -51,3 +51,33 @@ println(getvalue(x))
 println(getvalue(y))
 println("")
 
+
+
+m = Model()
+
+@variable(m, -2 <= x <= 2)
+@variable(m, -2 <= y <= 2)
+
+@objective(m, Min, -x-y)
+@NLconstraint(m, x^2 + y^2 <= 1.0)
+
+setsolver(m, ipopt)
+status = solve(m)
+@test status == :Optimal
+
+println("Ipopt Solve")
+println(getobjectivevalue(m))
+println(getvalue(x))
+println(getvalue(y))
+println("")
+
+
+setsolver(m, katana)
+status = solve(m)
+@test status == :Optimal
+
+println("Katana+GLPK Solve")
+println(getobjectivevalue(m))
+println(getvalue(x))
+println(getvalue(y))
+println("")
