@@ -1,2 +1,2 @@
 # Katana.jl
-A Cutting-Plain Based Solver for JuMP
+A Cutting-Plane Based Solver for JuMP
