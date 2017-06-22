@@ -1,5 +1,4 @@
 julia 0.5
 
-Ipopt
-GLPKMathProgInterface
-
+Ipopt 0.2.6
+GLPKMathProgInterface 0.3.4
