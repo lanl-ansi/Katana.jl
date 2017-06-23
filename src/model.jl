@@ -26,8 +26,20 @@ function MathProgBase.loadproblem!(
     # setup the internal LP model
     m.linear_model = Model(solver=m.lp_solver)
 
+    # distinguish between internal LP model and external NLP model
+    outer_nlpmod = d.m
+    inner_lpmod = m.linear_model
+
     # add variables
-    #@variable(m.linear_model, l_var <= x[1:num_var] <= u_var)
+    # TODO does this copy or just reference the same memory? may want to copy
+    inner_lpmod.numCols = outer_nlpmod.numCols
+    inner_lpmod.objDict = outer_nlpmod.objDict
+    inner_lpmod.colNames = outer_nlpmod.colNames
+    inner_lpmod.colNamesIJulia = outer_nlpmod.colNamesIJulia
+    inner_lpmod.colLower = outer_nlpmod.colLower
+    inner_lpmod.colUpper = outer_nlpmod.colUpper
+    inner_lpmod.colCat = outer_nlpmod.colCat
+    inner_lpmod.colVal = outer_nlpmod.colVal
 
     # by convention, "x" variables can be the original variables and 
     # "y" variables can be auxiliary variables
@@ -36,6 +48,8 @@ function MathProgBase.loadproblem!(
     if MathProgBase.isobjlinear(d)
         # add to model
         println("objective is linear")
+        obj = copy(outer_nlpmod.obj, inner_lpmod) # copy variables over to linear model
+        JuMP.setobjective(inner_lpmod, sense, obj)
     else
         if MathProgBase.isobjquadratic(d) && False # (add check if m.lp_solver can support quadratic obj)
             # add to model
@@ -45,16 +59,10 @@ function MathProgBase.loadproblem!(
         end
     end
 
-    for i in 1:num_constr
-        if MathProgBase.isconstrlinear(d,i)
-            #TODO add to model
-            println("constraint $(i) is linear")
-            println(MathProgBase.constr_expr(d, i))
-            # add constraints
-            #@constraint(m.linear_model, MathProgBase.constr_expr(d, i))
-        end
+    for constr in outer_nlpmod.linconstr
+      newconstr = copy(constr, inner_lpmod) # copy constraint
+      JuMP.addconstraint(inner_lpmod, newconstr)
     end
-
 end
 
 
