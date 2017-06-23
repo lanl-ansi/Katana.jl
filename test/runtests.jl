@@ -6,13 +6,12 @@ using Ipopt
 using GLPKMathProgInterface
 using Katana
 
-opt_tol = 1e-8
-sol_tol = 1e-8
+opt_tol = 1e-6
+sol_tol = 1e-6
 
 ipopt = IpoptSolver(print_level=0)
 
 katana = KatanaSolver(GLPKSolverLP())
-
 
 m = Model()
 
@@ -29,29 +28,38 @@ m = Model()
 # dummy constraint to force NonlinearModel instead of LinearQuadraticModel
 @NLconstraint(m, x >= -1000)
 
-
 setsolver(m, ipopt)
 status = solve(m)
 @test status == :Optimal
 
-println("Ipopt Solve")
-println(getobjectivevalue(m))
-println(getvalue(x))
-println(getvalue(y))
-println("")
+ipopt_val = getobjectivevalue(m)
+ipopt_x = getvalue(x)
+ipopt_y = getvalue(y)
 
+println("Ipopt Solve")
+println(ipopt_val)
+println(ipopt_x)
+println(ipopt_y)
+println("")
 
 setsolver(m, katana)
 status = solve(m)
 @test status == :Optimal
 
+katana_val = getobjectivevalue(m)
+katana_x = getvalue(x)
+katana_y = getvalue(y)
+
 println("Katana+GLPK Solve")
-println(getobjectivevalue(m))
-println(getvalue(x))
-println(getvalue(y))
+println(katana_val)
+println(katana_x)
+println(katana_y)
 println("")
 
-
+# linear program should have identical results
+@test abs(katana_val - ipopt_val) <= opt_tol
+@test abs(katana_x - ipopt_x) <= sol_tol
+@test abs(katana_y - ipopt_y) <= sol_tol
 
 m = Model()
 
