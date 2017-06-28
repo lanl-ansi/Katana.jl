@@ -135,8 +135,8 @@ opt_tol = 1e-8
 sol_tol = 1e-8
 
 # for the following tests the solver to use should be called "solver"
-#solver = katana
-solver = ipopt # useful for testing the tests
+solver = katana
+#solver = ipopt # useful for testing the tests
 
 include("lpqp.jl")
 

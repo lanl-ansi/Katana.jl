@@ -582,7 +582,7 @@
         @variable(m, y)
 
         @NLobjective(m, Min, e^(x))
-        @NLconstraint(m, x^2 + y^2 <= 1.0)
+        @constraint(m, x^2 + y^2 <= 1.0)
 
         status = solve(m)
 
@@ -600,7 +600,7 @@
         @variable(m, y)
 
         @NLobjective(m, Min, e^(x) + e^(y))
-        @NLconstraint(m, x^2 + y^2 <= 1.0)
+        @constraint(m, x^2 + y^2 <= 1.0)
 
         status = solve(m)
 
@@ -618,7 +618,7 @@
         @variable(m, y)
 
         @NLobjective(m, Min, e^(x+y))
-        @NLconstraint(m, x^2 + y^2 <= 1.0)
+        @constraint(m, x^2 + y^2 <= 1.0)
 
         status = solve(m)
 
