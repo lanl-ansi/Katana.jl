@@ -13,6 +13,9 @@ ipopt = IpoptSolver(print_level=0)
 
 katana = KatanaSolver(GLPKSolverLP())
 
+
+### A simple linear model
+### tests if pass through of linear model components works
 m = Model()
 
 @variable(m, x)
@@ -61,6 +64,9 @@ println("")
 @test abs(katana_x - ipopt_x) <= sol_tol
 @test abs(katana_y - ipopt_y) <= sol_tol
 
+
+### A simple convex model 
+### tests convergence of the fixpoint
 m = Model()
 
 @variable(m, -2 <= x <= 2)
@@ -99,4 +105,26 @@ println("")
 
 # cutting-plane approach should produce optimal objective
 @test abs(katana_val - ipopt_val) <= opt_tol
+
+### A simple linear model with a convex objective 
+### introduction of an auxiluary variable
+
+m = Model(solver=katana)
+
+@variable(m, x)
+@variable(m, y)
+
+@NLobjective(m, Min, (x-1)^2 + (y-2)^2)
+@constraint(m, x+y <= 5)
+@constraint(m, 2*x-y <= 3)
+@constraint(m, 3*x+9*y >= -10)
+@constraint(m, 10*x-y >= -20)
+@constraint(m, -x+2*y <= 8)
+
+status = solve(m)
+
+@test status == :Optimal
+@test isapprox(getobjectivevalue(m), 0.0, atol=opt_tol)
+@test isapprox(getvalue(x), 1.0, atol=sol_tol)
+@test isapprox(getvalue(y), 2.0, atol=sol_tol)
 
