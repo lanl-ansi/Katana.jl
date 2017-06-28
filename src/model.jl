@@ -3,14 +3,32 @@
 docs go here
 """
 type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
-    lp_solver::MathProgBase.AbstractMathProgSolver
-    linear_model::Union{Void,JuMP.Model}
-    status::Symbol
-    objval::Float64
+    lp_solver    :: MathProgBase.AbstractMathProgSolver
+    linear_model :: Union{Void,JuMP.Model}
+    nlp_eval     :: MathProgBase.AbstractNLPEvaluator
+    status       :: Symbol
+    objval       :: Float64
+    f_tol        :: Float64 # feasibility tolerance
+    nconstr   :: Int64 # number of NL constraints
+    dim          :: Int64 # number of variables
+
+    function KatanaNonlinearModel(lps::MathProgBase.AbstractMathProgSolver)
+        katana = new() # don't initialise everything yet
+        katana.lp_solver = lps
+        katana.status = :None
+        katana.objval = NaN
+        katana.f_tol = 1e-6
+        return katana
+    end
+end
+
+type SparseCol
+    col :: Int # column index in Jacobian
+    ind :: Int # original index in sparse Jacobian vector
 end
 
 function MathProgBase.NonlinearModel(s::KatanaSolver)
-    return KatanaNonlinearModel(s.lp_solver, nothing, :None, NaN)
+    return KatanaNonlinearModel(s.lp_solver)
 end
 
 
@@ -30,10 +48,18 @@ function MathProgBase.loadproblem!(
     outer_nlpmod = d.m
     inner_lpmod = m.linear_model
 
+    # initialise other fields of the KatanaNonlinearModel
+    m.nlp_eval = d # need this later for operations on the jacobian
+    m.dim = num_var
+    m.nconstr = MathProgBase.numconstr(outer_nlpmod)
+
     # add variables
-    # TODO does this copy or just reference the same memory? may want to copy
     inner_lpmod.numCols = outer_nlpmod.numCols
-    inner_lpmod.objDict = outer_nlpmod.objDict
+    inner_lpmod.objDict = Dict{Symbol, Any}()
+    for (key,val) in outer_nlpmod.objDict # deep copy objdict
+        var = JuMP.Variable(inner_lpmod, val.col)
+        JuMP.registervar(inner_lpmod, key, var)
+    end
     inner_lpmod.colNames = outer_nlpmod.colNames
     inner_lpmod.colNamesIJulia = outer_nlpmod.colNamesIJulia
     inner_lpmod.colLower = outer_nlpmod.colLower
@@ -60,20 +86,90 @@ function MathProgBase.loadproblem!(
     end
 
     for constr in outer_nlpmod.linconstr
-      newconstr = copy(constr, inner_lpmod) # copy constraint
-      JuMP.addconstraint(inner_lpmod, newconstr)
+        newconstr = copy(constr, inner_lpmod) # copy constraint
+        JuMP.addconstraint(inner_lpmod, newconstr)
     end
 end
 
 
-function MathProgBase.optimize!(m::KatanaNonlinearModel)
-    status = solve(m.linear_model)
 
-    if status == :Unbounded
-        #run bounding routine
+function MathProgBase.optimize!(m::KatanaNonlinearModel)
+    # fixpoint algorithm:
+    # 1. run LP solver to compute x*
+    # 2. for every unsatisfied non-linear constraint (±f_tol):
+    #   3. add first-order cut
+    # 4. check convergence (|g(x) - c| <= f_tol for all g) 
+
+    status = :NotSolved
+    sp_rows, sp_cols = MathProgBase.jac_structure(m.nlp_eval)
+    sp_by_row = Vector{SparseCol}[ [] for i=1:m.nconstr] # map a row to vector of nonzero columns' indices
+    N = 0 # number of sparse entries
+    for ind in 1:length(sp_rows)
+        i,j = sp_rows[ind],sp_cols[ind]
+        push!(sp_by_row[i], SparseCol(j,ind)) # column j is nonzero in row i
+        N += 1
     end
 
-    #TODO add fixpoint algorithm
+    J = zeros(N) # Jacobian of constraint functions
+    g = zeros(m.nconstr) # constraint values
+    allsat = false
+    iter = 0
+    while !allsat # placeholder condition
+        iter += 1
+        status = solve(m.linear_model)
+        if status == :Unbounded
+          # run bounding routine
+        elseif status != :Optimal break end
+
+        xstar = MathProgBase.getsolution(internalmodel(m.linear_model))
+        MathProgBase.eval_jac_g(m.nlp_eval, J, xstar) # hopefully variable ordering is consistent with MPB
+        MathProgBase.eval_g(m.nlp_eval, g, xstar) # evaluate constraints
+        allsat = true # base case
+        for i=1:m.nconstr
+            if !MathProgBase.isconstrlinear(m.nlp_eval,i) # is there a better way to iterate over NL constraints?
+                constr = MathProgBase.constr_expr(m.nlp_eval, i)
+                sat = false # is this constraint satisfied?
+                l = length(constr.args)
+                @assert l == 3 || l == 5 # sane assumption?
+                if l == 3 # one-sided constraint
+                    constr.args[2] = g[i] # evaluated constraint
+
+                    # here we determine if the constraint is a > or >= to add f_tol,
+                    #  or <, <= to subtract f_tol (if it's equality, it doesn't matter)
+                    op = eval(Expr(constr.head, constr.args[1], 1.0, 0.0)) ? (-) : (+)
+                    constr.args[3] = op(constr.args[3], m.f_tol) # add tolerance to bound
+                else
+                   constr.args[3] = g[i]
+
+                   # must be in the form lb <= constr <= ub, so we incorporate f_tol
+                   constr.args[1] -= m.f_tol
+                   constr.args[5] += m.f_tol
+                end
+                if !(sat = eval(constr)) # if constraint not satisfied, add Taylor cut
+                    # construct the affine expression from sparse gradient:
+                    #  g'(x) = g_i(x*) + (x-x*) ⋅ ∇g_i(x*)
+                    v = Vector{JuMP.Variable}()
+                    coefs = Vector{Float64}()
+                    b = g[i]
+                    inner_model = m.linear_model
+                    for spc in sp_by_row[i]
+                        # lookup JuMP variable from column index:
+                        var = inner_model.objDict[parse(inner_model.colNames[spc.col])]
+                        push!(v,var)
+                        partial = J[spc.ind]
+                        push!(coefs, partial)
+                        b += -xstar[spc.col]*partial
+                    end
+                    newconstr = LinearConstraint(AffExpr(v, coefs, 0.0), -Inf, -b)
+                    JuMP.addconstraint(inner_model, newconstr) # add this cut to the LP
+                end
+
+                allsat &= sat # loop condition: each constraint must be satisfied
+            end
+        end
+    end
+
+    println("Katana convergence in $iter iterations.")
 
     assert(status == :Optimal)
     m.status = status

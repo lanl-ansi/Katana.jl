@@ -73,19 +73,30 @@ setsolver(m, ipopt)
 status = solve(m)
 @test status == :Optimal
 
-println("Ipopt Solve")
-println(getobjectivevalue(m))
-println(getvalue(x))
-println(getvalue(y))
-println("")
+ipopt_val = getobjectivevalue(m)
+ipopt_x = getvalue(x)
+ipopt_y = getvalue(y)
 
+println("Ipopt Solve")
+println(ipopt_val)
+println(ipopt_x)
+println(ipopt_y)
+println("")
 
 setsolver(m, katana)
 status = solve(m)
 @test status == :Optimal
 
+katana_val = getobjectivevalue(m)
+katana_x = getvalue(x)
+katana_y = getvalue(y)
+
 println("Katana+GLPK Solve")
-println(getobjectivevalue(m))
-println(getvalue(x))
-println(getvalue(y))
+println(katana_val)
+println(katana_x)
+println(katana_y)
 println("")
+
+# cutting-plane approach should produce optimal objective
+@test abs(katana_val - ipopt_val) <= opt_tol
+
