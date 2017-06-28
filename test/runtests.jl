@@ -29,7 +29,8 @@ m = Model()
 @constraint(m, -x+2*y <= 8)
 
 # dummy constraint to force NonlinearModel instead of LinearQuadraticModel
-@NLconstraint(m, x >= -1000)
+# commented out to see if we can get it working with the conic-nl bridge
+#@NLconstraint(m, x >= -1000)
 
 setsolver(m, ipopt)
 status = solve(m)
@@ -73,7 +74,9 @@ m = Model()
 @variable(m, -2 <= y <= 2)
 
 @objective(m, Min, -x-y)
-@NLconstraint(m, x^2 + y^2 <= 1.0)
+@constraint(m, x^2 + y^2 <= 1.0)
+# commented out to see if we can get it working with the conic-nl bridge
+#@NLconstraint(m, x^2 + y^2 <= 1.0)
 
 setsolver(m, ipopt)
 status = solve(m)
@@ -114,7 +117,9 @@ m = Model(solver=katana)
 @variable(m, x)
 @variable(m, y)
 
-@NLobjective(m, Min, (x-1)^2 + (y-2)^2)
+# commented out to see if we can get it working with the conic-nl bridge
+#@NLobjective(m, Min, (x-1)^2 + (y-2)^2)
+@objective(m, Min, (x-1)^2 + (y-2)^2)
 @constraint(m, x+y <= 5)
 @constraint(m, 2*x-y <= 3)
 @constraint(m, 3*x+9*y >= -10)
