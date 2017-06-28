@@ -9,7 +9,9 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     status       :: Symbol
     objval       :: Float64
     f_tol        :: Float64 # feasibility tolerance
-    nconstr   :: Int64 # number of NL constraints
+    aux_lb       :: Float64 # auxiliary variable lower bound
+    aux_ub       :: Float64 # '' upper bound
+    nconstr      :: Int64 # number of NL constraints
     dim          :: Int64 # number of variables
 
     function KatanaNonlinearModel(lps::MathProgBase.AbstractMathProgSolver)
@@ -17,7 +19,11 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
         katana.lp_solver = lps
         katana.status = :None
         katana.objval = NaN
-        katana.f_tol = 1e-6
+        katana.f_tol = 1e-7
+
+        # are these sane? is this even the right approach?
+        katana.aux_lb = -1e6
+        katana.aux_ub = 1e6
         return katana
     end
 end
@@ -31,6 +37,21 @@ function MathProgBase.NonlinearModel(s::KatanaSolver)
     return KatanaNonlinearModel(s.lp_solver)
 end
 
+function _copyModelVariables(src::Model, dest::Model)
+    # add variables
+    dest.numCols = src.numCols
+    dest.objDict = Dict{Symbol, Any}()
+    for (key,val) in src.objDict # deep copy objdict
+        var = JuMP.Variable(dest, val.col)
+        JuMP.registervar(dest, key, var)
+    end
+    dest.colNames = src.colNames
+    dest.colNamesIJulia = src.colNamesIJulia
+    dest.colLower = src.colLower
+    dest.colUpper = src.colUpper
+    dest.colCat = src.colCat
+    dest.colVal = src.colVal
+end
 
 function MathProgBase.loadproblem!(
     m::KatanaNonlinearModel,
@@ -49,49 +70,57 @@ function MathProgBase.loadproblem!(
     inner_lpmod = m.linear_model
 
     # initialise other fields of the KatanaNonlinearModel
-    m.nlp_eval = d # need this later for operations on the jacobian
     m.dim = num_var
-    m.nconstr = MathProgBase.numconstr(outer_nlpmod)
 
-    # add variables
-    inner_lpmod.numCols = outer_nlpmod.numCols
-    inner_lpmod.objDict = Dict{Symbol, Any}()
-    for (key,val) in outer_nlpmod.objDict # deep copy objdict
-        var = JuMP.Variable(inner_lpmod, val.col)
-        JuMP.registervar(inner_lpmod, key, var)
-    end
-    inner_lpmod.colNames = outer_nlpmod.colNames
-    inner_lpmod.colNamesIJulia = outer_nlpmod.colNamesIJulia
-    inner_lpmod.colLower = outer_nlpmod.colLower
-    inner_lpmod.colUpper = outer_nlpmod.colUpper
-    inner_lpmod.colCat = outer_nlpmod.colCat
-    inner_lpmod.colVal = outer_nlpmod.colVal
-
-    # by convention, "x" variables can be the original variables and 
-    # "y" variables can be auxiliary variables
-    # a convention along these lines will help with filtering later
-
+    obj = nothing
     if MathProgBase.isobjlinear(d)
-        # add to model
+        # just copy variables and objective
         println("objective is linear")
-        obj = copy(outer_nlpmod.obj, inner_lpmod) # copy variables over to linear model
-        JuMP.setobjective(inner_lpmod, sense, obj)
+        _copyModelVariables(outer_nlpmod, inner_lpmod)
+        obj = copy(outer_nlpmod.obj, inner_lpmod) # copy expression over to linear model
     else
         if MathProgBase.isobjquadratic(d) && False # (add check if m.lp_solver can support quadratic obj)
             # add to model
         else
-            # add aux variable for objective and add to model
-            println("objective is nonlinear")
+            println("objective is nonlinear") # convert problem to epigraph form
+            # add aux variable to model:
+            aux = @variable(outer_nlpmod, basename="_aux", lowerbound=m.aux_lb, upperbound=m.aux_ub)
+            JuMP.registervar(outer_nlpmod, parse("_aux"), aux) # XXX hacky?
+
+            # add epigraph constraint to NL model (it's a non-linear constraint for Katana now)
+            @assert d.has_nlobj
+            nlexp = MathProgBase.obj_expr(d) # get nlobj as julia expression
+            # splice the new variable into the NL objective expression as nlobj - aux
+            epiexp = Expr(:call, :-, nlexp, JuMP.spliceref(outer_nlpmod, aux))
+            nd, vals = JuMP.ReverseDiffSparse.expr_to_nodedata(epiexp, outer_nlpmod.nlpdata.user_operators)
+            epi = JuMP.NonlinearExprData(nd,vals) # construct nonlinear expression for epigraph constraint
+
+            # determine bounds on epigraph constraint:
+            #   for Max, we have t <= f(x) aka f(x) - t >= 0
+            #   for Min, we have t >= f(x) aka f(x) - t <= 0
+            lb,ub = sense == :Max ? (0.0, Inf) : (-Inf, 0.0)
+            c = JuMP.NonlinearConstraint(epi, lb, ub) # construct nonlinear constraint
+            push!(outer_nlpmod.nlpdata.nlconstr, c)
+            # TODO we may want to keep a ConstraintRef for this?
+
+            # add aux variable for objective and add to linear model
+            _copyModelVariables(outer_nlpmod, inner_lpmod)
+            obj = AffExpr([Variable(inner_lpmod, aux.col)],[1.0],0.0)
         end
     end
 
+    m.nlp_eval = JuMP.NLPEvaluator(outer_nlpmod)
+    m.nconstr = MathProgBase.numconstr(outer_nlpmod)
+    MathProgBase.initialize(m.nlp_eval, [:Grad,:Jac,:Hess,:ExprGraph]) # reinitialise NLP evaluator
+
+    JuMP.setobjective(inner_lpmod, sense, obj)
+
+    # copy linear constraints to linear model
     for constr in outer_nlpmod.linconstr
-        newconstr = copy(constr, inner_lpmod) # copy constraint
+        newconstr = copy(constr, inner_lpmod)
         JuMP.addconstraint(inner_lpmod, newconstr)
     end
 end
-
-
 
 function MathProgBase.optimize!(m::KatanaNonlinearModel)
     # fixpoint algorithm:
@@ -134,9 +163,10 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
                 if l == 3 # one-sided constraint
                     constr.args[2] = g[i] # evaluated constraint
 
-                    # here we determine if the constraint is a > or >= to add f_tol,
-                    #  or <, <= to subtract f_tol (if it's equality, it doesn't matter)
-                    op = eval(Expr(constr.head, constr.args[1], 1.0, 0.0)) ? (-) : (+)
+                    # here we determine if the constraint is a > or >= to subtract f_tol,
+                    #  or <, <= to add f_tol (if it's equality, it doesn't matter)
+                    cmp = constr.args[1]
+                    op = cmp == :(>) || cmp == :(>=) ? (-) : (+)
                     constr.args[3] = op(constr.args[3], m.f_tol) # add tolerance to bound
                 else
                    constr.args[3] = g[i]
