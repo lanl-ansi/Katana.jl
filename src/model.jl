@@ -190,7 +190,8 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
                         push!(coefs, partial)
                         b += -xstar[spc.col]*partial
                     end
-                    newconstr = LinearConstraint(AffExpr(v, coefs, 0.0), -Inf, -b)
+                    lb,ub = g[i] >= 0 ? (-Inf, -b) : (-b, Inf)
+                    newconstr = LinearConstraint(AffExpr(v, coefs, 0.0), lb, ub)
                     JuMP.addconstraint(inner_model, newconstr) # add this cut to the LP
                 end
 
