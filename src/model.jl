@@ -1,18 +1,36 @@
 
+type SparseCol
+    col :: Int # column index in Jacobian
+    ind :: Int # original index in sparse Jacobian vector
+end
+
 """
 docs go here
 """
 type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     lp_solver    :: MathProgBase.AbstractMathProgSolver
     linear_model :: Union{Void,JuMP.Model}
-    nlp_eval     :: MathProgBase.AbstractNLPEvaluator
+    oracle       :: MathProgBase.AbstractNLPEvaluator
+
     status       :: Symbol
     objval       :: Float64
+
     f_tol        :: Float64 # feasibility tolerance
     aux_lb       :: Float64 # auxiliary variable lower bound
     aux_ub       :: Float64 # '' upper bound
-    nconstr      :: Int64 # number of NL constraints
-    dim          :: Int64 # number of variables
+
+    num_constr   :: Int64
+    num_var      :: Int64
+    l_constr     :: Vector{Float64}
+    u_constr     :: Vector{Float64}
+    l_obj        :: Float64
+    u_obj        :: Float64
+    objislinear  :: Bool
+
+    # TODO this should probably be its own struct
+    nlconstr_ixs :: Vector{Int64} # indices of the NL constraints
+    sp_by_row    :: Vector{Vector{SparseCol}} # map a row to vector of nonzero columns' indices
+    N            :: Int64 # number of nonzero entries in Jacobian
 
     function KatanaNonlinearModel(lps::MathProgBase.AbstractMathProgSolver)
         katana = new() # don't initialise everything yet
@@ -24,34 +42,58 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
         # are these sane? is this even the right approach?
         katana.aux_lb = -1e6
         katana.aux_ub = 1e6
+
+        katana.nlconstr_ixs = Vector{Int}()
         return katana
     end
-end
-
-type SparseCol
-    col :: Int # column index in Jacobian
-    ind :: Int # original index in sparse Jacobian vector
 end
 
 function MathProgBase.NonlinearModel(s::KatanaSolver)
     return KatanaNonlinearModel(s.lp_solver)
 end
 
-function _copyModelVariables(src::Model, dest::Model)
-    # add variables
-    dest.numCols = src.numCols
-    dest.objDict = Dict{Symbol, Any}()
-    for (key,val) in src.objDict # deep copy objdict
-        var = JuMP.Variable(dest, val.col)
-        JuMP.registervar(dest, key, var)
+# sp_row: vector of SparseCol (nonzero columns in the sparse Jacobian) for a given row
+# J: sparse Jacobian matrix, indexed by sp_row
+# g: evaluated constraint g_i(a)
+# a: point around which we construct the cut
+function _constructTaylorCut(m::KatanaNonlinearModel, sp_row::Vector{SparseCol}, J::Vector{Float64}, g::Float64, a)
+    # construct the affine expression from sparse gradient:
+    #  g'(x) = g_i(a) + (x-a) ⋅ ∇g_i(a)
+    v = Vector{JuMP.Variable}()
+    coefs = Vector{Float64}()
+    b = g
+    inner_model = m.linear_model
+    for spc in sp_row
+        # lookup JuMP variable from column index:
+#        var = inner_model.objDict[parse(inner_model.colNames[spc.col])]
+        var = JuMP.Variable(inner_model, spc.col)
+        push!(v,var)
+        partial = J[spc.ind]
+        push!(coefs, partial)
+        b += -a[spc.col]*partial
     end
-    dest.colNames = src.colNames
-    dest.colNamesIJulia = src.colNamesIJulia
-    dest.colLower = src.colLower
-    dest.colUpper = src.colUpper
-    dest.colCat = src.colCat
-    dest.colVal = src.colVal
+    AffExpr(v, coefs, 0.0), b # return an affine expression
 end
+
+# add a cut to the internal LP
+function _addCut(m::KatanaNonlinearModel, cut::Tuple{AffExpr,Float64}, lb::Float64, ub::Float64)
+    linexp, c = cut # a linear expression and a constant
+    newconstr = LinearConstraint(linexp, lb-c, ub-c)
+    println("adding: $newconstr")
+    JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
+end
+
+function _addEpigraphCut(m::KatanaNonlinearModel, f::Float64, pt)
+    ∇f = zeros(m.num_var+1)
+    MathProgBase.eval_grad_f(m.oracle, ∇f, pt[1:end-1])
+    ∇f[end] = -1
+    sp_row = SparseCol[ SparseCol(i,i) for i=1:m.num_var+1 ] # this is a dense row
+    y = JuMP.Variable(m.linear_model, m.num_var+1)
+    cut = _constructTaylorCut(m, sp_row, ∇f, f, pt)
+    _addCut(m, cut, m.l_obj, m.u_obj)
+end
+
+_isconstrsat(g, lb, ub, tol) = (g >= lb - tol) && (g <= ub + tol)
 
 function MathProgBase.loadproblem!(
     m::KatanaNonlinearModel,
@@ -60,65 +102,60 @@ function MathProgBase.loadproblem!(
     l_constr::Vector{Float64}, u_constr::Vector{Float64},
     sense::Symbol, d::MathProgBase.AbstractNLPEvaluator)
 
-    MathProgBase.initialize(d, [:Grad,:Jac,:Hess,:ExprGraph])
+    m.oracle = d # use this AbstractNLPEvaluator as an oracle that we query for ∇f, g, ∇g
+    MathProgBase.initialize(m.oracle, [:Grad,:Jac])
 
     # setup the internal LP model
     m.linear_model = Model(solver=m.lp_solver)
 
-    # distinguish between internal LP model and external NLP model
-    outer_nlpmod = d.m
     inner_lpmod = m.linear_model
 
+    # set up LP
+    @variable(inner_lpmod, l_var[i] <= x[i=1:num_var] <= u_var[i])
+    @variable(inner_lpmod, m.aux_lb <= y <= m.aux_ub) # add auxiliary variable
+    @objective(inner_lpmod, sense, y)
+
     # initialise other fields of the KatanaNonlinearModel
-    m.dim = num_var
+    m.num_var = num_var # TODO maybe a better way of keeping track of aux var?
+    m.num_constr = num_constr # TODO : should this include constraint on aux var?
+    m.l_constr = l_constr
+    m.u_constr = u_constr
+    # determine bounds on epigraph constraint:
+    #   for Max, we have t <= f(x) aka f(x) - t >= 0
+    #   for Min, we have t >= f(x) aka f(x) - t <= 0
+    m.l_obj, m.u_obj = sense == :Max ? (0.0, Inf) : (-Inf, 0.0)
 
-    obj = nothing
-    if MathProgBase.isobjlinear(d)
-        # just copy variables and objective
-        println("objective is linear")
-        _copyModelVariables(outer_nlpmod, inner_lpmod)
-        obj = copy(outer_nlpmod.obj, inner_lpmod) # copy expression over to linear model
-    else
-        if MathProgBase.isobjquadratic(d) && False # (add check if m.lp_solver can support quadratic obj)
-            # add to model
+    # map info of Jacobian J_g to allow faster lookups of nonzero entries by row:
+    sp_rows, sp_cols = MathProgBase.jac_structure(m.oracle)
+    m.sp_by_row = Vector{SparseCol}[ [] for i=1:num_constr] # map a row to vector of nonzero columns' indices
+    m.N = 0 # number of sparse entries
+    for ind in 1:length(sp_rows)
+        i,j = sp_rows[ind],sp_cols[ind]
+        push!(m.sp_by_row[i], SparseCol(j,ind)) # column j is nonzero in row i
+        m.N += 1
+    end
+
+    # copy linear constraints to linear model by constructing Taylor cuts
+    #  these Taylor cuts recreate the original linear constraint
+    J = zeros(m.N) # Jacobian of constraint functions
+    g = zeros(m.num_constr) # constraint values
+    pt = zeros(m.num_var)
+    MathProgBase.eval_jac_g(m.oracle, J, pt) # populate Jacobian
+    MathProgBase.eval_g(m.oracle, g, pt) # populate g
+    for i=1:num_constr
+        if MathProgBase.isconstrlinear(m.oracle, i)
+            cut = _constructTaylorCut(m, m.sp_by_row[i], J, g[i], pt)
+            _addCut(m, cut, l_constr[i], u_constr[i])
         else
-            println("objective is nonlinear") # convert problem to epigraph form
-            # add aux variable to model:
-            aux = @variable(outer_nlpmod, basename="_aux", lowerbound=m.aux_lb, upperbound=m.aux_ub)
-            JuMP.registervar(outer_nlpmod, parse("_aux"), aux) # XXX hacky?
-
-            # add epigraph constraint to NL model (it's a non-linear constraint for Katana now)
-            @assert d.has_nlobj
-            nlexp = MathProgBase.obj_expr(d) # get nlobj as julia expression
-            # splice the new variable into the NL objective expression as nlobj - aux
-            epiexp = Expr(:call, :-, nlexp, JuMP.spliceref(outer_nlpmod, aux))
-            nd, vals = JuMP.ReverseDiffSparse.expr_to_nodedata(epiexp, outer_nlpmod.nlpdata.user_operators)
-            epi = JuMP.NonlinearExprData(nd,vals) # construct nonlinear expression for epigraph constraint
-
-            # determine bounds on epigraph constraint:
-            #   for Max, we have t <= f(x) aka f(x) - t >= 0
-            #   for Min, we have t >= f(x) aka f(x) - t <= 0
-            lb,ub = sense == :Max ? (0.0, Inf) : (-Inf, 0.0)
-            c = JuMP.NonlinearConstraint(epi, lb, ub) # construct nonlinear constraint
-            push!(outer_nlpmod.nlpdata.nlconstr, c)
-            # TODO we may want to keep a ConstraintRef for this?
-
-            # add aux variable for objective and add to linear model
-            _copyModelVariables(outer_nlpmod, inner_lpmod)
-            obj = AffExpr([Variable(inner_lpmod, aux.col)],[1.0],0.0)
+            push!(m.nlconstr_ixs, i) # keep track of these NL constraints for later
         end
     end
 
-    m.nlp_eval = JuMP.NLPEvaluator(outer_nlpmod)
-    m.nconstr = MathProgBase.numconstr(outer_nlpmod)
-    MathProgBase.initialize(m.nlp_eval, [:Grad,:Jac,:Hess,:ExprGraph]) # reinitialise NLP evaluator
-
-    JuMP.setobjective(inner_lpmod, sense, obj)
-
-    # copy linear constraints to linear model
-    for constr in outer_nlpmod.linconstr
-        newconstr = copy(constr, inner_lpmod)
-        JuMP.addconstraint(inner_lpmod, newconstr)
+    # if linear objective, add it as constraint to LP here
+    m.objislinear = MathProgBase.isobjlinear(m.oracle)
+    if m.objislinear
+        f = MathProgBase.eval_f(m.oracle, pt)
+        _addEpigraphCut(m, f, pt)
     end
 end
 
@@ -130,17 +167,9 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     # 4. check convergence (|g(x) - c| <= f_tol for all g) 
 
     status = :NotSolved
-    sp_rows, sp_cols = MathProgBase.jac_structure(m.nlp_eval)
-    sp_by_row = Vector{SparseCol}[ [] for i=1:m.nconstr] # map a row to vector of nonzero columns' indices
-    N = 0 # number of sparse entries
-    for ind in 1:length(sp_rows)
-        i,j = sp_rows[ind],sp_cols[ind]
-        push!(sp_by_row[i], SparseCol(j,ind)) # column j is nonzero in row i
-        N += 1
-    end
 
-    J = zeros(N) # Jacobian of constraint functions
-    g = zeros(m.nconstr) # constraint values
+    J = zeros(m.N) # Jacobian of constraint functions
+    g = zeros(m.num_constr) # constraint values
     allsat = false
     iter = 0
     while !allsat # placeholder condition
@@ -151,52 +180,27 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         elseif status != :Optimal break end
 
         xstar = MathProgBase.getsolution(internalmodel(m.linear_model))
-        MathProgBase.eval_jac_g(m.nlp_eval, J, xstar) # hopefully variable ordering is consistent with MPB
-        MathProgBase.eval_g(m.nlp_eval, g, xstar) # evaluate constraints
+        println(xstar)
+        MathProgBase.eval_jac_g(m.oracle , J, xstar[1:end-1]) # hopefully variable ordering is consistent with MPB
+        MathProgBase.eval_g(m.oracle, g, xstar[1:end-1]) # evaluate constraints
         allsat = true # base case
-        for i=1:m.nconstr
-            if !MathProgBase.isconstrlinear(m.nlp_eval,i) # is there a better way to iterate over NL constraints?
-                constr = MathProgBase.constr_expr(m.nlp_eval, i)
-                sat = false # is this constraint satisfied?
-                l = length(constr.args)
-                @assert l == 3 || l == 5 # sane assumption?
-                if l == 3 # one-sided constraint
-                    constr.args[2] = g[i] # evaluated constraint
-
-                    # here we determine if the constraint is a > or >= to subtract f_tol,
-                    #  or <, <= to add f_tol (if it's equality, it doesn't matter)
-                    cmp = constr.args[1]
-                    op = cmp == :(>) || cmp == :(>=) ? (-) : (+)
-                    constr.args[3] = op(constr.args[3], m.f_tol) # add tolerance to bound
-                else
-                   constr.args[3] = g[i]
-
-                   # must be in the form lb <= constr <= ub, so we incorporate f_tol
-                   constr.args[1] -= m.f_tol
-                   constr.args[5] += m.f_tol
-                end
-                if !(sat = eval(constr)) # if constraint not satisfied, add Taylor cut
-                    # construct the affine expression from sparse gradient:
-                    #  g'(x) = g_i(x*) + (x-x*) ⋅ ∇g_i(x*)
-                    v = Vector{JuMP.Variable}()
-                    coefs = Vector{Float64}()
-                    b = g[i]
-                    inner_model = m.linear_model
-                    for spc in sp_by_row[i]
-                        # lookup JuMP variable from column index:
-                        var = inner_model.objDict[parse(inner_model.colNames[spc.col])]
-                        push!(v,var)
-                        partial = J[spc.ind]
-                        push!(coefs, partial)
-                        b += -xstar[spc.col]*partial
-                    end
-                    lb,ub = g[i] >= 0 ? (-Inf, -b) : (-b, Inf)
-                    newconstr = LinearConstraint(AffExpr(v, coefs, 0.0), lb, ub)
-                    JuMP.addconstraint(inner_model, newconstr) # add this cut to the LP
-                end
-
-                allsat &= sat # loop condition: each constraint must be satisfied
+        for i in m.nlconstr_ixs # iterate only over NL constraints
+            @assert !MathProgBase.isconstrlinear(m.oracle,i)
+            sat = _isconstrsat(g[i], m.l_constr[i], m.u_constr[i], m.f_tol)
+            if !sat # if constraint not satisfied, add Taylor cut
+                cut = _constructTaylorCut(m, m.sp_by_row[i], J, g[i], xstar)
+                _addCut(m, cut, m.l_constr[i], m.u_constr[i])
             end
+
+            allsat &= sat # loop condition: each constraint must be satisfied
+        end
+        if !m.objislinear # epigraph constraint is examined separately
+            f = MathProgBase.eval_f(m.oracle, xstar[1:end-1]) - xstar[m.num_var] # assuming y is last variable
+            sat = _isconstrsat(f, m.l_obj, m.u_obj, m.f_tol)
+            if !sat
+                _addEpigraphCut(m, f, xstar)
+            end
+            allsat &= sat
         end
     end
 
