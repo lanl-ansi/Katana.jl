@@ -16,6 +16,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     objval       :: Float64
 
     f_tol        :: Float64 # feasibility tolerance
+    iter_cap     :: Int64   # iteration cap
     aux_lb       :: Float64 # auxiliary variable lower bound
     aux_ub       :: Float64 # '' upper bound
 
@@ -37,7 +38,8 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
         katana.lp_solver = lps
         katana.status = :None
         katana.objval = NaN
-        katana.f_tol = 1e-7
+        katana.f_tol = 1e-6
+        katana.iter_cap = 100
 
         # are these sane? is this even the right approach?
         katana.aux_lb = -1e6
@@ -79,7 +81,6 @@ end
 function _addCut(m::KatanaNonlinearModel, cut::Tuple{AffExpr,Float64}, lb::Float64, ub::Float64)
     linexp, c = cut # a linear expression and a constant
     newconstr = LinearConstraint(linexp, lb-c, ub-c)
-    println("adding: $newconstr")
     JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
 end
 
@@ -176,7 +177,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     g = zeros(m.num_constr) # constraint values
     allsat = false
     iter = 0
-    while !allsat # placeholder condition
+    while !allsat && iter <= m.iter_cap
         iter += 1
         status = solve(m.linear_model)
         if status == :Unbounded
@@ -184,7 +185,6 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         elseif status != :Optimal break end
 
         xstar = MathProgBase.getsolution(internalmodel(m.linear_model))
-        println(xstar)
         MathProgBase.eval_jac_g(m.oracle , J, xstar[1:end-1]) # hopefully variable ordering is consistent with MPB
         MathProgBase.eval_g(m.oracle, g, xstar[1:end-1]) # evaluate constraints
         allsat = true # base case
