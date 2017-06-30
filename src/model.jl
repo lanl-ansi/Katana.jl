@@ -154,8 +154,11 @@ function MathProgBase.loadproblem!(
     # if linear objective, add it as constraint to LP here
     m.objislinear = MathProgBase.isobjlinear(m.oracle)
     if m.objislinear
+        println("objective is linear")
         f = MathProgBase.eval_f(m.oracle, pt)
         _addEpigraphCut(m, f, pt)
+    else
+        println("objective is nonlinear")
     end
 end
 
@@ -195,7 +198,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
             allsat &= sat # loop condition: each constraint must be satisfied
         end
         if !m.objislinear # epigraph constraint is examined separately
-            f = MathProgBase.eval_f(m.oracle, xstar[1:end-1]) - xstar[m.num_var] # assuming y is last variable
+            f = MathProgBase.eval_f(m.oracle, xstar[1:end-1]) - xstar[end] # assuming y is last variable
             sat = _isconstrsat(f, m.l_obj, m.u_obj, m.f_tol)
             if !sat
                 _addEpigraphCut(m, f, xstar)
