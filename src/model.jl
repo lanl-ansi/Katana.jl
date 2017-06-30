@@ -153,9 +153,10 @@ function MathProgBase.loadproblem!(
 
     # if linear objective, add it as constraint to LP here
     m.objislinear = MathProgBase.isobjlinear(m.oracle)
+    pt = zeros(m.num_var+1)
     if m.objislinear
         println("objective is linear")
-        f = MathProgBase.eval_f(m.oracle, pt)
+        f = MathProgBase.eval_f(m.oracle, pt[1:end-1])
         _addEpigraphCut(m, f, pt)
     else
         println("objective is nonlinear")
