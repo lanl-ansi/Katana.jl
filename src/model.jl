@@ -58,7 +58,7 @@ end
 # J: sparse Jacobian matrix, indexed by sp_row
 # g: evaluated constraint g_i(a)
 # a: point around which we construct the cut
-function _constructTaylorCut(m::KatanaNonlinearModel, sp_row::Vector{SparseCol}, J::Vector{Float64}, g::Float64, a)
+function _constructNewtonCut(m::KatanaNonlinearModel, sp_row::Vector{SparseCol}, J::Vector{Float64}, g::Float64, a)
     # construct the affine expression from sparse gradient:
     #  g'(x) = g_i(a) + (x-a) ⋅ ∇g_i(a)
     v = Vector{JuMP.Variable}()
@@ -90,7 +90,7 @@ function _addEpigraphCut(m::KatanaNonlinearModel, f::Float64, pt)
     ∇f[end] = -1
     sp_row = SparseCol[ SparseCol(i,i) for i=1:m.num_var+1 ] # this is a dense row
     y = JuMP.Variable(m.linear_model, m.num_var+1)
-    cut = _constructTaylorCut(m, sp_row, ∇f, f, pt)
+    cut = _constructNewtonCut(m, sp_row, ∇f, f, pt)
     _addCut(m, cut, m.l_obj, m.u_obj)
 end
 
@@ -136,8 +136,8 @@ function MathProgBase.loadproblem!(
         m.N += 1
     end
 
-    # copy linear constraints to linear model by constructing Taylor cuts
-    #  these Taylor cuts recreate the original linear constraint
+    # copy linear constraints to linear model by constructing Newton cuts
+    #  these Newton cuts recreate the original linear constraint
     J = zeros(m.N) # Jacobian of constraint functions
     g = zeros(m.num_constr) # constraint values
     pt = zeros(m.num_var)
@@ -145,7 +145,7 @@ function MathProgBase.loadproblem!(
     MathProgBase.eval_g(m.oracle, g, pt) # populate g
     for i=1:num_constr
         if MathProgBase.isconstrlinear(m.oracle, i)
-            cut = _constructTaylorCut(m, m.sp_by_row[i], J, g[i], pt)
+            cut = _constructNewtonCut(m, m.sp_by_row[i], J, g[i], pt)
             _addCut(m, cut, l_constr[i], u_constr[i])
         else
             push!(m.nlconstr_ixs, i) # keep track of these NL constraints for later
@@ -189,10 +189,10 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         MathProgBase.eval_g(m.oracle, g, xstar[1:end-1]) # evaluate constraints
         allsat = true # base case
         for i in m.nlconstr_ixs # iterate only over NL constraints
-            @assert !MathProgBase.isconstrlinear(m.oracle,i)
+#            @assert !MathProgBase.isconstrlinear(m.oracle,i)
             sat = _isconstrsat(g[i], m.l_constr[i], m.u_constr[i], m.f_tol)
-            if !sat # if constraint not satisfied, add Taylor cut
-                cut = _constructTaylorCut(m, m.sp_by_row[i], J, g[i], xstar)
+            if !sat # if constraint not satisfied, add Newton cut
+                cut = _constructNewtonCut(m, m.sp_by_row[i], J, g[i], xstar)
                 _addCut(m, cut, m.l_constr[i], m.u_constr[i])
             end
 
@@ -224,6 +224,9 @@ MathProgBase.status(m::KatanaNonlinearModel) = m.status
 MathProgBase.getobjval(m::KatanaNonlinearModel) = getobjectivevalue(m.linear_model)
 
 # any auxiliary variables will need to be filtered from this at some point
-MathProgBase.getsolution(m::KatanaNonlinearModel) = MathProgBase.getsolution(internalmodel(m.linear_model))
+function MathProgBase.getsolution(m::KatanaNonlinearModel)
+  x = MathProgBase.getsolution(internalmodel(m.linear_model))
+  x[1:end-1] # aux variable should always be last variable
+end
 
 
