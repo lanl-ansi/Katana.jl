@@ -4,14 +4,15 @@ using JuMP
 
 using Ipopt
 using GLPKMathProgInterface
+using Gurobi
 using Katana
 
 opt_tol = 1e-6
-sol_tol = 1e-6
+sol_tol = 1e-2
 
 ipopt = IpoptSolver(print_level=0)
 
-katana = KatanaSolver(GLPKSolverLP())
+katana = KatanaSolver(GurobiSolver(OutputFlag=0))
 
 
 ### A simple linear model
@@ -141,8 +142,8 @@ println("Optimal: ($katana_x, $katana_y) -> $katana_val")
 
 
 # for the following tests ipopt returns solutions up to this tolerance
-opt_tol = 1e-8
-sol_tol = 1e-8
+opt_tol = 1e-2
+sol_tol = 1e-2
 
 # for the following tests the solver to use should be called "solver"
 solver = katana
