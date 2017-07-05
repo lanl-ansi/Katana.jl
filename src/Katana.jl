@@ -4,8 +4,6 @@ using MathProgBase
 using ConicNonlinearBridge
 using JuMP
 
-export KatanaSolver
-
 # parameter passing between KatanaSolver and KatanaNonlinearModel
 immutable KatanaModelParams
     f_tol        :: Float64 # feasibility tolerance
@@ -16,5 +14,6 @@ end
 
 include("solver.jl")
 include("model.jl")
+include("util.jl")
 
 end

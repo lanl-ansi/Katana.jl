@@ -30,6 +30,8 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     sp_by_row    :: Vector{Vector{SparseCol}} # map a row to vector of nonzero columns' indices
     N            :: Int64 # number of nonzero entries in Jacobian
 
+    linear_cuts  :: Vector{ConstraintRef{Model,LinearConstraint}}
+
     KatanaNonlinearModel() = new()
 end
 
@@ -42,6 +44,7 @@ function KatanaNonlinearModel(lps :: MathProgBase.AbstractMathProgSolver, model_
     katana.params = model_params
 
     katana.nlconstr_ixs = Vector{Int}()
+    katana.linear_cuts = Vector{ConstraintRef{Model,LinearConstraint}}()
     return katana
 end
 
@@ -76,7 +79,8 @@ end
 function _addCut(m::KatanaNonlinearModel, cut::Tuple{AffExpr,Float64}, lb::Float64, ub::Float64)
     linexp, c = cut # a linear expression and a constant
     newconstr = LinearConstraint(linexp, lb-c, ub-c)
-    JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
+    cref = JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
+    push!(m.linear_cuts, cref)
 end
 
 function _addEpigraphCut(m::KatanaNonlinearModel, f::Float64, pt)
