@@ -39,7 +39,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
         katana.status = :None
         katana.objval = NaN
         katana.f_tol = 1e-6
-        katana.iter_cap = 100
+        katana.iter_cap = 10000
 
         # are these sane? is this even the right approach?
         katana.aux_lb = -1e6
@@ -168,7 +168,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     # fixpoint algorithm:
     # 1. run LP solver to compute x*
     # 2. for every unsatisfied non-linear constraint (±f_tol):
-    #   3. add first-order cut
+    #   3. add cut with specified cutting method
     # 4. check convergence (|g(x) - c| <= f_tol for all g) 
 
     status = :NotSolved
