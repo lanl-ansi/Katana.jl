@@ -15,10 +15,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     status       :: Symbol
     objval       :: Float64
 
-    f_tol        :: Float64 # feasibility tolerance
-    iter_cap     :: Int64   # iteration cap
-    aux_lb       :: Float64 # auxiliary variable lower bound
-    aux_ub       :: Float64 # '' upper bound
+    params       :: KatanaModelParams
 
     num_constr   :: Int64
     num_var      :: Int64
@@ -33,25 +30,23 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     sp_by_row    :: Vector{Vector{SparseCol}} # map a row to vector of nonzero columns' indices
     N            :: Int64 # number of nonzero entries in Jacobian
 
-    function KatanaNonlinearModel(lps::MathProgBase.AbstractMathProgSolver)
-        katana = new() # don't initialise everything yet
-        katana.lp_solver = lps
-        katana.status = :None
-        katana.objval = NaN
-        katana.f_tol = 1e-6
-        katana.iter_cap = 10000
+    KatanaNonlinearModel() = new()
+end
 
-        # are these sane? is this even the right approach?
-        katana.aux_lb = -1e6
-        katana.aux_ub = 1e6
+function KatanaNonlinearModel(lps :: MathProgBase.AbstractMathProgSolver, model_params :: KatanaModelParams)
+    katana = KatanaNonlinearModel() # don't initialise everything yet
+    katana.lp_solver = lps
+    katana.status = :None
+    katana.objval = NaN
 
-        katana.nlconstr_ixs = Vector{Int}()
-        return katana
-    end
+    katana.params = model_params
+
+    katana.nlconstr_ixs = Vector{Int}()
+    return katana
 end
 
 function MathProgBase.NonlinearModel(s::KatanaSolver)
-    return KatanaNonlinearModel(s.lp_solver)
+    return KatanaNonlinearModel(s.lp_solver, s.model_params)
 end
 
 # sp_row: vector of SparseCol (nonzero columns in the sparse Jacobian) for a given row
@@ -113,7 +108,7 @@ function MathProgBase.loadproblem!(
 
     # set up LP
     @variable(inner_lpmod, l_var[i] <= x[i=1:num_var] <= u_var[i])
-    @variable(inner_lpmod, m.aux_lb <= y <= m.aux_ub) # add auxiliary variable
+    @variable(inner_lpmod, m.params.aux_lb <= y <= m.params.aux_ub) # add auxiliary variable
     @objective(inner_lpmod, sense, y)
 
     # initialise other fields of the KatanaNonlinearModel
@@ -177,7 +172,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     g = zeros(m.num_constr) # constraint values
     allsat = false
     iter = 0
-    while !allsat && iter <= m.iter_cap
+    while !allsat && iter <= m.params.iter_cap
         iter += 1
         status = solve(m.linear_model)
         if status == :Unbounded
@@ -190,7 +185,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         allsat = true # base case
         for i in m.nlconstr_ixs # iterate only over NL constraints
 #            @assert !MathProgBase.isconstrlinear(m.oracle,i)
-            sat = _isconstrsat(g[i], m.l_constr[i], m.u_constr[i], m.f_tol)
+            sat = _isconstrsat(g[i], m.l_constr[i], m.u_constr[i], m.params.f_tol)
             if !sat # if constraint not satisfied, add Newton cut
                 cut = _constructNewtonCut(m, m.sp_by_row[i], J, g[i], xstar)
                 _addCut(m, cut, m.l_constr[i], m.u_constr[i])
@@ -200,7 +195,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         end
         if !m.objislinear # epigraph constraint is examined separately
             f = MathProgBase.eval_f(m.oracle, xstar[1:end-1]) - xstar[end] # assuming y is last variable
-            sat = _isconstrsat(f, m.l_obj, m.u_obj, m.f_tol)
+            sat = _isconstrsat(f, m.l_obj, m.u_obj, m.params.f_tol)
             if !sat
                 _addEpigraphCut(m, f, xstar)
             end
