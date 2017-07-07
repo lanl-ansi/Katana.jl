@@ -1,4 +1,4 @@
-export getKatanaModel, getKatanaCuts
+export getKatanaModel, getKatanaCuts, getKatanaSols
 
 getKatanaModel(m :: KatanaNonlinearModel) = m
 getKatanaModel(m :: MathProgBase.SolverInterface.NonlinearToLPQPBridge) = m.nlpmodel
@@ -32,4 +32,6 @@ function getKatanaCuts(m :: KatanaNonlinearModel)
 
     return table
 end
+
+getKatanaSols(m :: KatanaNonlinearModel) = m.lp_sols
 

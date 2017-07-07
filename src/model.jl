@@ -4,6 +4,11 @@ type SparseCol
     ind :: Int # original index in sparse Jacobian vector
 end
 
+type KatanaFeatures
+    VisData :: Bool
+end
+KatanaFeatures() = KatanaFeatures(false)
+
 """
 docs go here
 """
@@ -16,6 +21,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     objval       :: Float64
 
     params       :: KatanaModelParams
+    features     :: KatanaFeatures
 
     num_constr   :: Int64
     num_var      :: Int64
@@ -30,12 +36,14 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     sp_by_row    :: Vector{Vector{SparseCol}} # map a row to vector of nonzero columns' indices
     N            :: Int64 # number of nonzero entries in Jacobian
 
+    # visualisation logging
     linear_cuts  :: Vector{ConstraintRef{Model,LinearConstraint}}
+    lp_sols      :: Vector{Vector{Float64}}
 
     KatanaNonlinearModel() = new()
 end
 
-function KatanaNonlinearModel(lps :: MathProgBase.AbstractMathProgSolver, model_params :: KatanaModelParams)
+function KatanaNonlinearModel(lps::MathProgBase.AbstractMathProgSolver, feats::Vector{Symbol}, model_params::KatanaModelParams)
     katana = KatanaNonlinearModel() # don't initialise everything yet
     katana.lp_solver = lps
     katana.status = :None
@@ -43,13 +51,19 @@ function KatanaNonlinearModel(lps :: MathProgBase.AbstractMathProgSolver, model_
 
     katana.params = model_params
 
+    katana.features = KatanaFeatures()
+    for f in feats
+        setfield!(katana.features, f, true)
+    end
+
     katana.nlconstr_ixs = Vector{Int}()
     katana.linear_cuts = Vector{ConstraintRef{Model,LinearConstraint}}()
+    katana.lp_sols = Vector{Vector{Float64}}()
     return katana
 end
 
 function MathProgBase.NonlinearModel(s::KatanaSolver)
-    return KatanaNonlinearModel(s.lp_solver, s.model_params)
+    return KatanaNonlinearModel(s.lp_solver, s.features, s.model_params)
 end
 
 # sp_row: vector of SparseCol (nonzero columns in the sparse Jacobian) for a given row
@@ -80,7 +94,7 @@ function _addCut(m::KatanaNonlinearModel, cut::Tuple{AffExpr,Float64}, lb::Float
     linexp, c = cut # a linear expression and a constant
     newconstr = LinearConstraint(linexp, lb-c, ub-c)
     cref = JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
-    push!(m.linear_cuts, cref)
+    m.features.VisData && push!(m.linear_cuts, cref)
 end
 
 function _addEpigraphCut(m::KatanaNonlinearModel, f::Float64, pt)
@@ -184,6 +198,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         elseif status != :Optimal break end
 
         xstar = MathProgBase.getsolution(internalmodel(m.linear_model))
+        m.features.VisData && push!(m.lp_sols, xstar)
         MathProgBase.eval_jac_g(m.oracle , J, xstar[1:end-1]) # hopefully variable ordering is consistent with MPB
         MathProgBase.eval_g(m.oracle, g, xstar[1:end-1]) # evaluate constraints
         allsat = true # base case
