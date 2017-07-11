@@ -31,10 +31,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     u_obj        :: Float64
     objislinear  :: Bool
 
-    # TODO this should probably be its own struct
     nlconstr_ixs :: Vector{Int64} # indices of the NL constraints
-    sp_by_row    :: Vector{Vector{SparseCol}} # map a row to vector of nonzero columns' indices
-    N            :: Int64 # number of nonzero entries in Jacobian
 
     # visualisation logging
     linear_cuts  :: Vector{ConstraintRef{Model,LinearConstraint}}
@@ -79,20 +76,19 @@ function _constructNewtonCut(m::KatanaNonlinearModel, sp_row::Vector{SparseCol},
     inner_model = m.linear_model
     for spc in sp_row
         # lookup JuMP variable from column index:
-#        var = inner_model.objDict[parse(inner_model.colNames[spc.col])]
         var = JuMP.Variable(inner_model, spc.col)
         push!(v,var)
         partial = J[spc.ind]
         push!(coefs, partial)
         b += -a[spc.col]*partial
     end
-    AffExpr(v, coefs, 0.0), b # return an affine expression
+    AffExpr(v, coefs, b) # return an affine expression
 end
 
 # add a cut to the internal LP
-function _addCut(m::KatanaNonlinearModel, cut::Tuple{AffExpr,Float64}, lb::Float64, ub::Float64)
-    linexp, c = cut # a linear expression and a constant
-    newconstr = LinearConstraint(linexp, lb-c, ub-c)
+function _addCut(m::KatanaNonlinearModel, cut::AffExpr, lb::Float64, ub::Float64)
+    c = cut.constant
+    newconstr = LinearConstraint(cut, lb-c, ub-c)
     cref = JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
     m.features.VisData && push!(m.linear_cuts, cref)
 end
@@ -139,15 +135,7 @@ function MathProgBase.loadproblem!(
     #   for Min, we have t >= f(x) aka f(x) - t <= 0
     m.l_obj, m.u_obj = sense == :Max ? (0.0, Inf) : (-Inf, 0.0)
 
-    # map info of Jacobian J_g to allow faster lookups of nonzero entries by row:
-    sp_rows, sp_cols = MathProgBase.jac_structure(m.oracle)
-    m.sp_by_row = Vector{SparseCol}[ [] for i=1:num_constr] # map a row to vector of nonzero columns' indices
-    m.N = 0 # number of sparse entries
-    for ind in 1:length(sp_rows)
-        i,j = sp_rows[ind],sp_cols[ind]
-        push!(m.sp_by_row[i], SparseCol(j,ind)) # column j is nonzero in row i
-        m.N += 1
-    end
+
 
     # copy linear constraints to linear model by constructing Newton cuts
     #  these Newton cuts recreate the original linear constraint
