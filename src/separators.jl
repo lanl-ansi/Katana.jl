@@ -3,25 +3,40 @@ export AbstractKatanaSeparator, KatanaFirstOrderSeparator, initialize!, precompu
 abstract type AbstractKatanaSeparator end
 
 """
-    initialize!(sep::AbstractKatanaSeparator, linear_model, num_constr, oracle::MathProgBase.AbstractNLPEvaluator)
+    initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, oracle::MathProgBase.AbstractNLPEvaluator)
 
 Initialise an instance of a subtype of `AbstractKatanaSeparator`. This method is called by `loadproblem!` and MUST be overridden.
-`linear_model` is the internal linear model of the `KatanaNonlinearModel`. `num_constr` is the number of constraints in the problem,
-excluding the epigraph constraint on the objective function (see solver implementation description). `oracle` can be queried
-for first- and second- derivative information and must be initialised in this method (see MathProgBase documentation on nonlinear models).
+`linear_model` is the internal linear model of the `KatanaNonlinearModel`.
+
+`num_var` is the number of solution variables, including the auxiliary variable added by Katana. `num_constr` is the number of
+constraints in the problem, including the epigraph constraint on the objective function. See solver implementation documentation
+for more information. If applicable, the implementing separator is responsible for distinguishing all other constraints from the
+epigraph constraint, which can be assumed to always be indexed last.
+
+`oracle` can be queried for first- and second- derivative information and must be initialised in this method (see MathProgBase
+documentation on nonlinear models).
 """
-initialize!(sep::AbstractKatanaSeparator, linear_model, num_constr, oracle::MathProgBase.AbstractNLPEvaluator) = error("Not implemented: Katana.initialize!")
+initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, oracle::MathProgBase.AbstractNLPEvaluator) = error("Not implemented: Katana.initialize!")
 
 """
-    gencut!(separator::AbstractKatanaSeparator, xstar, i)
+    gencut!(sep::AbstractKatanaSeparator, xstar, i)
 
-Generate a cut given an LP solution `xstar` for constraint `i`. If `i` is greater than `num_constr` passed in `initialize!`,
-treat the objective as a constraint and generate a cut for it. This method MUST be overridden for a subtype of `AbstractKatanaSeparator`.
+Generate a cut given an LP solution `xstar` for constraint `i`. This method MUST be overridden for a subtype of `AbstractKatanaSeparator`.
+
+Return a JuMP.AffExpr object.
 """
-gencut!(separator::AbstractKatanaSeparator, xstar, i) = error("Not implemented: Katana.gencut!")
+gencut(sep::AbstractKatanaSeparator, xstar, i) = error("Not implemented: Katana.gencut!")
 
 """
-    precompute!(separator :: AbstractKatanaSeparator, xstar)
+    isconstrsat(sep::AbstractKatanaSeparator, i, lb, ub, f_tol)
+
+Returns true if the ith constraint is satisfied for the given bounds and tolerance. This method MUST be overriden for a subtype of
+`AbstractKatanaSeparator` as querying evaluated constraints is implementation-dependent.
+"""
+isconstrsat(sep::AbstractKatanaSeparator, i, lb, ub, f_tol) = error("Not implemented: Katana.isconstrsat")
+
+"""
+    precompute!(sep::AbstractKatanaSeparator, xstar)
 
 Implement this method for a subtype of AbstractKatanaSeparator if your separator might only need to evaluate
 certain information once for all constraints using a solution from the internal LP model.
@@ -29,7 +44,7 @@ certain information once for all constraints using a solution from the internal 
 `xstar` is the solution vector from the `KatanaNonlinearModel`'s LP model, including the added auxiliary variable
 representing the value of the objective function (which is itself evaluated as a constraint).
 """
-precompute!(separator :: AbstractKatanaSeparator) = nothing
+precompute!(sep::AbstractKatanaSeparator, xstar) = nothing
 
 """
 An implementation of `AbstractKatanaSeparator` for any first-order cutting algorithm.
@@ -41,28 +56,38 @@ type KatanaFirstOrderSeparator <: AbstractKatanaSeparator
     linear_model :: JuMP.Model # JuMP LP model used by KatanaNonlinearModel
     oracle :: MathProgBase.AbstractNLPEvaluator # evaluator queried as oracle
 
-    jac :: Vector{Float64} # jacobian sparse matrix
-    g   :: Vector{Float64} # vector of constraint values returned by MathProgBase.eval_g()
+    num_var :: Int
+    num_constr :: Int
+
+    # first-order derivative information:
+    xstar :: Vector{Float64}
+    g     :: Vector{Float64} # vector of constraint values returned by MathProgBase.eval_g()
+    jac   :: Vector{Float64} # jacobian sparse matrix
+    f     :: Float64 # evaluated objective value
+    ∇f    :: Vector{Float64} # objective gradient
 
     algo # cutting-plane generator that takes: separator, point and constraint index and returns an AffExpr
 
-    function KatanaFirstOrderSeparator(algo) = (s = new(); s.algo = algo) # TODO default algo?
+    KatanaFirstOrderSeparator(algo) = (s = new(); s.algo = algo; s)
+    KatanaFirstOrderSeparator() = KatanaFirstOrderSeparator(linear_oa_cut)
 end
 
 # Implements initialize! for KatanaFirstOrderSeparators. This initialises the oracle with necessary features
 #  and processes the sparsity structure of the Jacobian to allow faster lookups of non-zero entries by row.
 function initialize!(sep          :: KatanaFirstOrderSeparator,
                      linear_model :: JuMP.Model,
+                     num_var      :: Int,
                      num_constr   :: Int,
                      oracle       :: MathProgBase.AbstractNLPEvaluator)
     sep.linear_model = linear_model
 
-    MathProgBase.initialize(oracle, [:Grad, :Jac, :JacVec]) # certain cut algos may need jacobian-vector products?
+    MathProgBase.initialize(oracle, [:Grad, :Jac])
     sep.oracle = oracle
 
     # map info of Jacobian J_g to allow faster lookups of nonzero entries by row:
     sp_rows, sp_cols = MathProgBase.jac_structure(oracle)
-    sep.sp_cols = Vector{Int}[ [] for i=1:num_constr] # map a row to vector of nonzero columns' indices
+    sep.sp_cols = Vector{Int}[ [] for i=1:num_constr-1] # map a row to vector of nonzero columns' indices
+    sep.sp_col_inds = Vector{Int}[ [] for i=1:num_constr-1] # map row to vector of indices in sparse matrix
     N = length(sp_rows) # number of sparse entries
     for ind in 1:N
         i,j = sp_rows[ind],sp_cols[ind]
@@ -70,18 +95,29 @@ function initialize!(sep          :: KatanaFirstOrderSeparator,
         push!(sep.sp_col_inds[i], ind)
     end
 
+    sep.g = zeros(num_constr-1)
     sep.jac = zeros(N)
-    sep.g = zeros(num_constr)
+    sep.∇f = zeros(num_var)
+
+    sep.num_var = num_var
+    sep.num_constr = num_constr
 end
 
 # Implements precompute! for KatanaFirstOrderSeparators. This evaluates every constraint at the point xstar and computes
 #  and stores the sparse Jacobian at xstar
-function precompute!(separator :: KatanaFirstOrderSeparator, xstar)
-    MathProgBase.eval_jac_g(separator.oracle , separator.jac, xstar[1:end-1]) # hopefully variable ordering is consistent with MPB
-    MathProgBase.eval_g(separator.oracle, separator.g, xstar[1:end-1]) # evaluate constraints
+function precompute!(sep::KatanaFirstOrderSeparator, xstar)
+    MathProgBase.eval_jac_g(sep.oracle , sep.jac, xstar[1:end-1]) # hopefully variable ordering is consistent with MPB
+    MathProgBase.eval_g(sep.oracle, sep.g, xstar[1:end-1]) # evaluate constraints
+
+    sep.f = MathProgBase.eval_f(sep.oracle, xstar[1:end-1]) - xstar[end]
+    MathProgBase.eval_grad_f(sep.oracle, sep.∇f, xstar[1:end-1])
+
+    sep.xstar = xstar # ensure that the x* point matches the gradient information that is precomputed
 end
 
-function gencut!(separator :: KatanaFirstOrderSeparator, xstar, i)
-    cut = separator.algo(separator, xstar, i) # TODO
-    # TODO add cut to LP model
+gencut(sep::KatanaFirstOrderSeparator, xstar, i) = sep.algo(sep, xstar, i)
+
+function isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub, f_tol)
+    g = i > sep.num_constr-1 ? sep.f : sep.g[i]
+    (g >= lb - f_tol) && (g <= ub + f_tol)
 end

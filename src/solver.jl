@@ -23,13 +23,13 @@ bounds on auxiliary variables `aux_lb` and `aux_ub`, and an iteration cap specif
 of rounds of LP solves + cut generation in `iter_cap`.
 
 The `separator` is any implementing subtype of `AbstractKatanaSeparator`. It serves as the separation oracle
-used by the solver. The default is a first order separator that generates a single Newton cut.
+used by the solver. The default is a first order separator that generates a single Newton cut per constraint.
 
 The `features` vector is a list of optional features to enable in the solver. Currently supported are
 * `:VisData` ``-`` Internal model logs actions to be exported and visualised
 """
 function KatanaSolver(lp_solver::MathProgBase.AbstractMathProgSolver;
-                      separator = KatanaFirstOrderSeparator(), # TODO API not yet complete
+                      separator = KatanaFirstOrderSeparator(),
                       features = Vector{Symbol}(),
                       f_tol    :: Float64 = 1e-6,
                       aux_lb   :: Float64 = -1e6,
