@@ -172,7 +172,11 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         end
     end
 
-    println("Katana convergence in $(m.iter) iterations.")
+    if m.iter >= m.params.iter_cap
+        status = :UserLimit
+    else
+        println("Katana convergence in $(m.iter) iterations.")
+    end
 
     m.status = status
     return m.status
