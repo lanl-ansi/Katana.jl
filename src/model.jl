@@ -78,32 +78,24 @@ function MathProgBase.loadproblem!(
     # setup the internal LP model
     m.linear_model = Model(solver=m.lp_solver)
 
-    # set up LP
+    # set up LP variables
     @variable(m.linear_model, l_var[i] <= x[i=1:num_var] <= u_var[i])
-    @variable(m.linear_model, m.params.aux_lb <= y <= m.params.aux_ub) # add auxiliary variable
-    @objective(m.linear_model, sense, y)
 
     # initialise other fields of the KatanaNonlinearModel
-    m.num_var = num_var+1 # NB: counts aux variable
-    m.num_constr = num_constr+1 # NB: counts epigraph constraint
+    m.num_var = num_var
+    m.num_constr = num_constr
     m.l_constr = l_constr
     m.u_constr = u_constr
-    # determine bounds on epigraph constraint:
-    #   for Max, we have t <= f(x) aka f(x) - t >= 0
-    #   for Min, we have t >= f(x) aka f(x) - t <= 0
-    l_obj, u_obj = sense == :Max ? (0.0, Inf) : (-Inf, 0.0)
-    push!(m.l_constr, l_obj)
-    push!(m.u_constr, u_obj)
-
-    # initialise the AbstractKatanaSeparator
-    sep = m.params.separator
-    initialize!(sep, m.linear_model, m.num_var, m.num_constr, d)
 
     # copy linear constraints to linear model by constructing Newton cuts
     #  these Newton cuts recreate the original linear constraint
+    # act as if there is an auxiliary variable so that we can generate a 'cut'
+    #  on the objective as well, if the objective is linear, in order to recreate
+    #  the original linear objective as a constraint
     fsep = KatanaFirstOrderSeparator() # with default algo
-    initialize!(fsep, m.linear_model, m.num_var, m.num_constr, d)
-    pt = zeros(m.num_var)
+    epi_d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1) # wrap d
+    initialize!(fsep, m.linear_model, num_var+1, num_constr+1, epi_d)
+    pt = zeros(num_var+1)
     precompute!(fsep, pt)
     for i=1:num_constr
         if MathProgBase.isconstrlinear(d, i)
@@ -114,16 +106,39 @@ function MathProgBase.loadproblem!(
         end
     end
 
-    # if linear objective, add it as constraint to LP here
+    # if nonlinear objective, create new variable and bound it by the objective
     m.objislinear = MathProgBase.isobjlinear(d)
     if m.objislinear
         println("objective is linear")
-        cut = gencut(fsep, pt, m.num_constr)
-        _addcut(m, cut, l_obj, u_obj)
+        # this 'cut' approximates the original linear objective exactly
+        cut = gencut(fsep, pt, num_constr+1) # get AffExpr for linear objective
+        @assert cut.vars[end].col == num_var+1
+        pop!(cut.vars) # pop non-existant 'variable'
+        pop!(cut.coeffs) # and its coefficient
+        JuMP.setobjective(m.linear_model, sense, cut)
     else
         println("objective is nonlinear")
-        push!(m.nlconstr_ixs, m.num_constr)
+
+        @variable(m.linear_model, m.params.aux_lb <= y <= m.params.aux_ub) # add auxiliary variable
+        m.num_var += 1
+        @objective(m.linear_model, sense, y)
+
+        # determine bounds on epigraph constraint and add to constraints
+        #   for Max, we have t <= f(x) aka f(x) - t >= 0
+        #   for Min, we have t >= f(x) aka f(x) - t <= 0
+        l_obj, u_obj = sense == :Max ? (0.0, Inf) : (-Inf, 0.0)
+        push!(m.l_constr, l_obj)
+        push!(m.u_constr, u_obj)
+        m.num_constr += 1
+
+        push!(m.nlconstr_ixs, m.num_constr) # add new constraint to list of NL indices
+
+        d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1) # wrap d
     end
+
+    # initialise the AbstractKatanaSeparator passed to the model
+    sep = m.params.separator
+    initialize!(sep, m.linear_model, m.num_var, m.num_constr, d)
 end
 
 function MathProgBase.optimize!(m::KatanaNonlinearModel)
@@ -136,12 +151,11 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     status = :NotSolved
 
     allsat = false
-    while !allsat && m.iter <= m.params.iter_cap
+    while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
         status = solve(m.linear_model)
-        if status == :Unbounded
-          # run bounding routine
-        elseif status != :Optimal break end
+        # TODO if status == :Unbounded run bounding routine
+        if status != :Optimal return m.status = status end
 
         xstar = MathProgBase.getsolution(internalmodel(m.linear_model))
         m.features.VisData && push!(m.lp_sols, xstar)
@@ -150,8 +164,6 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         for i in m.nlconstr_ixs # iterate only over NL constraints, possibly including epigraph constraint
             sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
             if !sat # if constraint not satisfied, call separator API to generate the cut
-                # NB: it is the cut-generation algo's responsibility to check if this constraint
-                #  is on the objective and handle it accordingly
                 cut = gencut(m.params.separator, xstar, i)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
             end
@@ -162,28 +174,24 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
 
     println("Katana convergence in $(m.iter) iterations.")
 
-    assert(status == :Optimal)
     m.status = status
     return m.status
 end
 
 """
-    katana_numiters(m::KatanaNonlinearModel)
+    numiters(m::KatanaNonlinearModel)
 
 Returns the number of iterations taken by the model.
 """
-katana_numiters(m::KatanaNonlinearModel) = m.iter
+numiters(m::KatanaNonlinearModel) = m.iter
 
-MathProgBase.setwarmstart!(m::KatanaNonlinearModel, x) = fill(NaN, m.num_var-1)
+MathProgBase.setwarmstart!(m::KatanaNonlinearModel, x) = fill(0.0, length(x))
 
 MathProgBase.status(m::KatanaNonlinearModel) = m.status
 MathProgBase.getobjval(m::KatanaNonlinearModel) = getobjectivevalue(m.linear_model)
 MathProgBase.numconstr(m::KatanaNonlinearModel) = MathProgBase.numconstr(m.linear_model)
 
 # any auxiliary variables will need to be filtered from this at some point
-function MathProgBase.getsolution(m::KatanaNonlinearModel)
-  x = MathProgBase.getsolution(internalmodel(m.linear_model))
-  x[1:end-1] # aux variable should always be last variable
-end
+MathProgBase.getsolution(m::KatanaNonlinearModel) = MathProgBase.getsolution(internalmodel(m.linear_model))
 
 

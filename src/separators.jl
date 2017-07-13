@@ -8,10 +8,8 @@ abstract type AbstractKatanaSeparator end
 Initialise an instance of a subtype of `AbstractKatanaSeparator`. This method is called by `loadproblem!` and MUST be overridden.
 `linear_model` is the internal linear model of the `KatanaNonlinearModel`.
 
-`num_var` is the number of solution variables, including the auxiliary variable added by Katana. `num_constr` is the number of
-constraints in the problem, including the epigraph constraint on the objective function. See solver implementation documentation
-for more information. If applicable, the implementing separator is responsible for distinguishing all other constraints from the
-epigraph constraint, which can be assumed to always be indexed last.
+`num_var` is the number of solution variables, as passed by Katana. `num_constr` is the number of
+constraints in the problem, as passed by Katana. See solver implementation documentation for details.
 
 `oracle` can be queried for first- and second- derivative information and must be initialised in this method (see MathProgBase
 documentation on nonlinear models).
@@ -41,8 +39,7 @@ isconstrsat(sep::AbstractKatanaSeparator, i, lb, ub, f_tol) = error("Not impleme
 Implement this method for a subtype of AbstractKatanaSeparator if your separator might only need to evaluate
 certain information once for all constraints using a solution from the internal LP model.
 
-`xstar` is the solution vector from the `KatanaNonlinearModel`'s LP model, including the added auxiliary variable
-representing the value of the objective function (which is itself evaluated as a constraint).
+`xstar` is the solution vector from the `KatanaNonlinearModel`'s LP model
 """
 precompute!(sep::AbstractKatanaSeparator, xstar) = nothing
 
@@ -63,8 +60,6 @@ type KatanaFirstOrderSeparator <: AbstractKatanaSeparator
     xstar :: Vector{Float64}
     g     :: Vector{Float64} # vector of constraint values returned by MathProgBase.eval_g()
     jac   :: Vector{Float64} # jacobian sparse matrix
-    f     :: Float64 # evaluated objective value
-    ∇f    :: Vector{Float64} # objective gradient
 
     algo # cutting-plane generator that takes: separator, point and constraint index and returns an AffExpr
 
@@ -86,8 +81,8 @@ function initialize!(sep          :: KatanaFirstOrderSeparator,
 
     # map info of Jacobian J_g to allow faster lookups of nonzero entries by row:
     sp_rows, sp_cols = MathProgBase.jac_structure(oracle)
-    sep.sp_cols = Vector{Int}[ [] for i=1:num_constr-1] # map a row to vector of nonzero columns' indices
-    sep.sp_col_inds = Vector{Int}[ [] for i=1:num_constr-1] # map row to vector of indices in sparse matrix
+    sep.sp_cols = Vector{Int}[ [] for i=1:num_constr] # map a row to vector of nonzero columns' indices
+    sep.sp_col_inds = Vector{Int}[ [] for i=1:num_constr] # map row to vector of indices in sparse matrix
     N = length(sp_rows) # number of sparse entries
     for ind in 1:N
         i,j = sp_rows[ind],sp_cols[ind]
@@ -95,9 +90,8 @@ function initialize!(sep          :: KatanaFirstOrderSeparator,
         push!(sep.sp_col_inds[i], ind)
     end
 
-    sep.g = zeros(num_constr-1)
+    sep.g = zeros(num_constr)
     sep.jac = zeros(N)
-    sep.∇f = zeros(num_var)
 
     sep.num_var = num_var
     sep.num_constr = num_constr
@@ -106,18 +100,12 @@ end
 # Implements precompute! for KatanaFirstOrderSeparators. This evaluates every constraint at the point xstar and computes
 #  and stores the sparse Jacobian at xstar
 function precompute!(sep::KatanaFirstOrderSeparator, xstar)
-    MathProgBase.eval_jac_g(sep.oracle , sep.jac, xstar[1:end-1]) # hopefully variable ordering is consistent with MPB
-    MathProgBase.eval_g(sep.oracle, sep.g, xstar[1:end-1]) # evaluate constraints
-
-    sep.f = MathProgBase.eval_f(sep.oracle, xstar[1:end-1]) - xstar[end]
-    MathProgBase.eval_grad_f(sep.oracle, sep.∇f, xstar[1:end-1])
+    MathProgBase.eval_jac_g(sep.oracle, sep.jac, xstar) # hopefully variable ordering is consistent with MPB
+    MathProgBase.eval_g(sep.oracle, sep.g, xstar) # evaluate constraints
 
     sep.xstar = xstar # ensure that the x* point matches the gradient information that is precomputed
 end
 
 gencut(sep::KatanaFirstOrderSeparator, xstar, i) = sep.algo(sep, xstar, i)
 
-function isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub, f_tol)
-    g = i > sep.num_constr-1 ? sep.f : sep.g[i]
-    (g >= lb - f_tol) && (g <= ub + f_tol)
-end
+isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub, f_tol) = (sep.g[i] >= lb - f_tol) && (sep.g[i] <= ub + f_tol)
