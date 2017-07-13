@@ -119,7 +119,7 @@ function MathProgBase.loadproblem!(
     else
         println("objective is nonlinear")
 
-        @variable(m.linear_model, m.params.aux_lb <= y <= m.params.aux_ub) # add auxiliary variable
+        @variable(m.linear_model, y) # add auxiliary variable
         m.num_var += 1
         @objective(m.linear_model, sense, y)
 
