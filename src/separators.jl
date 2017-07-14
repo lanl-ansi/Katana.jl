@@ -1,6 +1,8 @@
 export AbstractKatanaSeparator, KatanaFirstOrderSeparator, initialize!, precompute!, gencut!
 
-abstract type AbstractKatanaSeparator end
+using Compat
+
+@compat abstract type AbstractKatanaSeparator end
 
 """
     initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, oracle::MathProgBase.AbstractNLPEvaluator)
