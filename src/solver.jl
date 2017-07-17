@@ -15,10 +15,12 @@ end
                  features = Vector{Symbol}(),
                  f_tol = 1e-6,
                  cut_coef_rng = 1e9,
+                 log_level = 10,
                  iter_cap = 10000)
 
 Construct a `KatanaSolver` with feasibility tolerance `f_tol`, a maximum coefficient range per cut `cut_coef_rng` and an
-iteration cap specifying the number of rounds of LP solves + cut generation in `iter_cap`.
+iteration cap specifying the maximum number of rounds of LP solves + cut generation in `iter_cap`. Print out solver progress
+every `log_level` number of iterations, or suppress output with `log_level=0`.
 
 `cut_coef_rng` is used to round-off close-to-zero coefficients in generated cuts.
 
@@ -33,8 +35,9 @@ function KatanaSolver(lp_solver::MathProgBase.AbstractMathProgSolver;
                       features = Vector{Symbol}(),
                       f_tol    :: Float64 = 1e-6,
                       cut_coef_rng :: Float64 = 1e9,
+                      log_level :: Int = 10,
                       iter_cap :: Int     = 10000)
-    return KatanaSolver(lp_solver, features, KatanaModelParams(f_tol, iter_cap, cut_coef_rng, separator))
+    return KatanaSolver(lp_solver, features, KatanaModelParams(f_tol, iter_cap, log_level, cut_coef_rng, separator))
 end
 
 # this bridge should make lp/qp models act like nlp models

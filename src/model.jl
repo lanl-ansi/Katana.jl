@@ -24,6 +24,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     objislinear  :: Bool
 
     nlconstr_ixs :: Vector{Int64} # indices of the NL constraints
+    num_nlconstr :: Int
 
     # visualisation logging
     linear_cuts  :: Vector{ConstraintRef{Model,LinearConstraint}}
@@ -31,6 +32,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
 
     # stats
     iter   :: Int
+    numcuts :: Int
 
     KatanaNonlinearModel() = new()
 end
@@ -53,6 +55,7 @@ function KatanaNonlinearModel(lps::MathProgBase.AbstractMathProgSolver, feats::V
     katana.lp_sols = Vector{Vector{Float64}}()
 
     katana.iter = 0
+    katana.numcuts = 0
     return katana
 end
 
@@ -65,6 +68,7 @@ function _addcut(m::KatanaNonlinearModel, cut::AffExpr, lb::Float64, ub::Float64
     c = cut.constant
     newconstr = LinearConstraint(cut, lb-c, ub-c)
     cref = JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
+    m.numcuts += 1
     m.features.VisData && push!(m.linear_cuts, cref)
 end
 
@@ -105,11 +109,12 @@ function MathProgBase.loadproblem!(
             push!(m.nlconstr_ixs, i) # keep track of these NL constraints for later
         end
     end
+    m.num_nlconstr = length(m.nlconstr_ixs)
 
     # if nonlinear objective, create new variable and bound it by the objective
     m.objislinear = MathProgBase.isobjlinear(d)
     if m.objislinear
-        println("objective is linear")
+        m.params.log_level > 0 && println("objective is linear")
         # this 'cut' approximates the original linear objective exactly
         cut = gencut(fsep, pt, num_constr+1) # get AffExpr for linear objective
         @assert cut.vars[end].col == num_var+1
@@ -117,7 +122,7 @@ function MathProgBase.loadproblem!(
         pop!(cut.coeffs) # and its coefficient
         JuMP.setobjective(m.linear_model, sense, cut)
     else
-        println("objective is nonlinear")
+        m.params.log_level > 0 && println("objective is nonlinear")
 
         @variable(m.linear_model, y) # add auxiliary variable
         m.num_var += 1
@@ -141,6 +146,35 @@ function MathProgBase.loadproblem!(
     initialize!(sep, m.linear_model, m.num_var, m.num_constr, d)
 end
 
+function boundroutine(m::KatanaNonlinearModel)
+    # bounding: binary search on x vector until feasibility violated,
+    #           at that point, we are outside the constraint surface - make a cut
+    #           on the violated constraint(s)
+    for sign=[-1,1]
+        for n=0:1023
+            x = fill(sign*2.0^n, m.num_var)
+            allsat = true
+            for i in m.nlconstr_ixs
+                sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
+                if !sat
+                    cut = gencut(m.params.separator, xstar, i)
+                    println(cut)
+                    _addcut(m, cut, m.l_constr[i], m.u_constr[i])
+                end
+                allsat &= sat
+            end
+
+            if !allsat break end # stop searching in this direction
+        end
+    end
+end
+
+function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt)
+    avg = cuts_lastprnt/(iter_lastprnt*m.num_nlconstr)
+    # TODO for now, number of active cuts is same as number of cuts since we don't dynamically remove cuts yet
+    @printf("%-10d %-15d %-15d %-20.2f %-15d\n", m.iter, m.numcuts, cuts_lastprnt, avg, m.numcuts)
+end
+
 function MathProgBase.optimize!(m::KatanaNonlinearModel)
     # fixpoint algorithm:
     # 1. run LP solver to compute x*
@@ -148,34 +182,57 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     #   3. add cut with specified cutting method
     # 4. check convergence (|g(x) - c| <= f_tol for all g) 
 
-    status = :NotSolved
+    if m.params.log_level > 0
+        @printf("%-10s %-15s %-15s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Avg constr. viol.", "Active cuts")
+    end
 
+    status = :NotSolved
     allsat = false
+    cuts_lastprnt = 0 # number of cuts since last printout
     while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
         status = solve(m.linear_model)
-        # TODO if status == :Unbounded run bounding routine
-        if status != :Optimal return m.status = status end
+        xstar = nothing
+        if status == :Optimal
+            xstar = MathProgBase.getsolution(internalmodel(m.linear_model))
+        elseif status == :Unbounded
+            #println("WARN: automatically bounding unbounded variables")
+            #boundroutine(m)
+            #status = solve(m.linear_model)
+        end
 
-        xstar = MathProgBase.getsolution(internalmodel(m.linear_model))
+        if status != :Optimal # give up
+            return m.status = status
+        end
+
         m.features.VisData && push!(m.lp_sols, xstar)
         precompute!(m.params.separator, xstar)
         allsat = true # base case
+
         for i in m.nlconstr_ixs # iterate only over NL constraints, possibly including epigraph constraint
             sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
             if !sat # if constraint not satisfied, call separator API to generate the cut
                 cut = gencut(m.params.separator, xstar, i)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
+                cuts_lastprnt += 1
             end
 
             allsat &= sat # loop condition: each constraint must be satisfied
+        end
+
+        if m.params.log_level > 0
+            r = m.iter % m.params.log_level
+            if r == 0
+                print_stats(m, m.params.log_level, cuts_lastprnt)
+                cuts_lastprnt = 0
+            elseif allsat
+                print_stats(m, r, cuts_lastprnt)
+            end
         end
     end
 
     if m.iter >= m.params.iter_cap
         status = :UserLimit
-    else
-        println("Katana convergence in $(m.iter) iterations.")
     end
 
     m.status = status
