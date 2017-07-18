@@ -2,7 +2,7 @@
 #  that means, `a` is not used, but exists for API compatibility
 function linear_oa_cut(sep::KatanaFirstOrderSeparator, a, i::Int)
     # construct the affine expression from sparse gradient:
-    #  g'(x) = g_i(a) + (x-a) ⋅ ∇g_i(a)
+    #  g_i(a) + (x-a) ⋅ ∇g_i(a)
     v = Vector{JuMP.Variable}()
     coefs = Vector{Float64}()
     b = sep.g[i] # evaluated constraint

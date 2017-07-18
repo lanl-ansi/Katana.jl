@@ -11,7 +11,7 @@ end
 
 """
     KatanaSolver(lp_solver::MathProgBase.AbstractMathProgSolver;
-                 separator = KatanaFirstOrderSeparator(#TODO),
+                 separator = KatanaFirstOrderSeparator(),
                  features = Vector{Symbol}(),
                  f_tol = 1e-6,
                  cut_coef_rng = 1e9,
@@ -36,8 +36,9 @@ function KatanaSolver(lp_solver::MathProgBase.AbstractMathProgSolver;
                       f_tol    :: Float64 = 1e-6,
                       cut_coef_rng :: Float64 = 1e9,
                       log_level :: Int = 10,
-                      iter_cap :: Int     = 10000)
-    return KatanaSolver(lp_solver, features, KatanaModelParams(f_tol, iter_cap, log_level, cut_coef_rng, separator))
+                      iter_cap :: Int     = 10000,
+                      presolve_cap :: Int = 10)
+    return KatanaSolver(lp_solver, features, KatanaModelParams(f_tol, iter_cap, presolve_cap, log_level, cut_coef_rng, separator))
 end
 
 # this bridge should make lp/qp models act like nlp models

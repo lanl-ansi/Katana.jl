@@ -146,26 +146,24 @@ function MathProgBase.loadproblem!(
     initialize!(sep, m.linear_model, m.num_var, m.num_constr, d)
 end
 
-function boundroutine(m::KatanaNonlinearModel)
-    # bounding: binary search on x vector until feasibility violated,
+function boundroutine(m::KatanaNonlinearModel, ray)
+    # bounding: binary search on unbounded ray until feasibility violated,
     #           at that point, we are outside the constraint surface - make a cut
     #           on the violated constraint(s)
-    for sign=[-1,1]
-        for n=0:1023
-            x = fill(sign*2.0^n, m.num_var)
-            allsat = true
-            for i in m.nlconstr_ixs
-                sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
-                if !sat
-                    cut = gencut(m.params.separator, xstar, i)
-                    println(cut)
-                    _addcut(m, cut, m.l_constr[i], m.u_constr[i])
-                end
-                allsat &= sat
+    for n=0:1023
+        x = (2.0^n)*ray
+        allsat = true
+        precompute!(m.params.separator, x)
+        for i in m.nlconstr_ixs
+            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
+            if !sat
+                cut = gencut(m.params.separator, x, i)
+                _addcut(m, cut, m.l_constr[i], m.u_constr[i])
             end
-
-            if !allsat break end # stop searching in this direction
+            allsat &= sat
         end
+
+        if !allsat break end # stop searching in this direction
     end
 end
 
@@ -182,28 +180,41 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     #   3. add cut with specified cutting method
     # 4. check convergence (|g(x) - c| <= f_tol for all g) 
 
+    # presolve: resolve initially-unbounded LP
+    status = solve(m.linear_model)
+    mpb_lp = internalmodel(m.linear_model)
+    i = 0
+    while status == :Unbounded && i < m.params.presolve_cap
+        println("[KATANA] automatically bounding unbounded variables")
+        ray = MathProgBase.getunboundedray(mpb_lp)
+        println("[KATANA] Unbounded ray along: $ray")
+        boundroutine(m, ray) # bound along unbounded ray of LP
+        status = solve(m.linear_model)
+        i += 1
+    end
+
+    if i == m.params.presolve_cap
+        println("[KATANA] could not resolve unbounded LP")
+        return m.status = status
+    end
+
     if m.params.log_level > 0
+        println("Katana presolve complete.")
         @printf("%-10s %-15s %-15s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Avg constr. viol.", "Active cuts")
     end
 
-    status = :NotSolved
     allsat = false
     cuts_lastprnt = 0 # number of cuts since last printout
     while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
         status = solve(m.linear_model)
-        xstar = nothing
-        if status == :Optimal
-            xstar = MathProgBase.getsolution(internalmodel(m.linear_model))
-        elseif status == :Unbounded
-            #println("WARN: automatically bounding unbounded variables")
-            #boundroutine(m)
-            #status = solve(m.linear_model)
-        end
+        mpb_lp = internalmodel(m.linear_model)
 
         if status != :Optimal # give up
             return m.status = status
         end
+
+        xstar = MathProgBase.getsolution(mpb_lp)
 
         m.features.VisData && push!(m.lp_sols, xstar)
         precompute!(m.params.separator, xstar)
@@ -246,11 +257,17 @@ Returns the number of iterations taken by the model.
 """
 numiters(m::KatanaNonlinearModel) = m.iter
 
+"""
+    numcuts(m::KatanaNonlinearModel)
+
+Returns the number of cuts added to the model
+"""
+numcuts(m::KatanaNonlinearModel) = m.numcuts
+
 MathProgBase.setwarmstart!(m::KatanaNonlinearModel, x) = fill(0.0, length(x))
 
 MathProgBase.status(m::KatanaNonlinearModel) = m.status
 MathProgBase.getobjval(m::KatanaNonlinearModel) = getobjectivevalue(m.linear_model)
-MathProgBase.numconstr(m::KatanaNonlinearModel) = MathProgBase.numconstr(m.linear_model)
 
 # any auxiliary variables will need to be filtered from this at some point
 MathProgBase.getsolution(m::KatanaNonlinearModel) = MathProgBase.getsolution(internalmodel(m.linear_model))
