@@ -150,7 +150,7 @@ function boundroutine(m::KatanaNonlinearModel, ray)
     # bounding: binary search on unbounded ray until feasibility violated,
     #           at that point, we are outside the constraint surface - make a cut
     #           on the violated constraint(s)
-    for n=0:1023
+    for n=2:1023
         x = (2.0^n)*ray
         allsat = true
         precompute!(m.params.separator, x)
@@ -164,6 +164,16 @@ function boundroutine(m::KatanaNonlinearModel, ray)
         end
 
         if !allsat break end # stop searching in this direction
+    end
+end
+
+# determine largest coefficient and set all coefs more than cut_coef_rng lower to 0
+function round_coefs( cut::AffExpr, cut_coef_rng::Float64)
+    max_coef = maximum(cut.coeffs)
+    for i=1:length(cut.coeffs)
+        if cut.coeffs[i] + cut_coef_rng < max_coef
+            cut.coeffs[i] = 0.0
+        end
     end
 end
 
@@ -184,7 +194,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     status = solve(m.linear_model)
     mpb_lp = internalmodel(m.linear_model)
     i = 0
-    while status == :Unbounded && i < m.params.presolve_cap
+    while status == :Unbounded && i < max(m.params.presolve_cap, m.num_var)
         println("[KATANA] automatically bounding unbounded variables")
         ray = MathProgBase.getunboundedray(mpb_lp)
         println("[KATANA] Unbounded ray along: $ray")
@@ -224,6 +234,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
             sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
             if !sat # if constraint not satisfied, call separator API to generate the cut
                 cut = gencut(m.params.separator, xstar, i)
+                round_coefs(cut, m.params.cut_coef_rng)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
                 cuts_lastprnt += 1
             end

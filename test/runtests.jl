@@ -12,8 +12,8 @@ sol_tol = 1e-2
 
 ipopt = IpoptSolver(print_level=0)
 
-#katana = KatanaSolver(GLPKSolverLP())
-katana = KatanaSolver(GurobiSolver(OutputFlag=0))
+katana = KatanaSolver(GLPKSolverLP(), log_level=0)
+#katana = KatanaSolver(GurobiSolver(OutputFlag=0))
 
 
 ### A simple linear model
