@@ -191,25 +191,27 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     # 4. check convergence (|g(x) - c| <= f_tol for all g) 
 
     # presolve: resolve initially-unbounded LP
-    status = solve(m.linear_model)
+    status = solve(m.linear_model,suppress_warnings=true)
+    if status == :Unbounded
+        Base.warn("Automatically bounding unbounded LP")
+    end
+
     mpb_lp = internalmodel(m.linear_model)
     i = 0
     while status == :Unbounded && i < max(m.params.presolve_cap, m.num_var)
-        println("[KATANA] automatically bounding unbounded variables")
         ray = MathProgBase.getunboundedray(mpb_lp)
-        println("[KATANA] Unbounded ray along: $ray")
+        println("Unbounded ray along: $ray")
         boundroutine(m, ray) # bound along unbounded ray of LP
-        status = solve(m.linear_model)
+        status = solve(m.linear_model,suppress_warnings=true)
         i += 1
     end
 
     if i == m.params.presolve_cap
-        println("[KATANA] could not resolve unbounded LP")
+        Base.warn("Katana could not resolve unbounded LP")
         return m.status = status
     end
 
     if m.params.log_level > 0
-        println("Katana presolve complete.")
         @printf("%-10s %-15s %-15s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Avg constr. viol.", "Active cuts")
     end
 
@@ -217,7 +219,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     cuts_lastprnt = 0 # number of cuts since last printout
     while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
-        status = solve(m.linear_model)
+        status = solve(m.linear_model, suppress_warnings=true)
         mpb_lp = internalmodel(m.linear_model)
 
         if status != :Optimal # give up
