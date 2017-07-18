@@ -4,7 +4,9 @@ using JuMP
 
 using Ipopt
 using GLPKMathProgInterface
-using Gurobi
+if Pkg.installed("Gurobi")
+    using Gurobi
+end
 using Katana
 
 opt_tol = 1e-6
