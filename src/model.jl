@@ -33,6 +33,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     # stats
     iter   :: Int
     numcuts :: Int
+    soltime :: Float64
 
     KatanaNonlinearModel() = new()
 end
@@ -191,6 +192,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     # 4. check convergence (|g(x) - c| <= f_tol for all g) 
 
     # presolve: resolve initially-unbounded LP
+    start = time()
     status = solve(m.linear_model,suppress_warnings=true)
     if status == :Unbounded
         Base.warn("Automatically bounding unbounded LP")
@@ -200,7 +202,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     i = 0
     while status == :Unbounded && i < max(m.params.presolve_cap, m.num_var)
         ray = MathProgBase.getunboundedray(mpb_lp)
-        println("Unbounded ray along: $ray")
+        m.params.log_level > 0 && println("Unbounded ray along: $ray")
         boundroutine(m, ray) # bound along unbounded ray of LP
         status = solve(m.linear_model,suppress_warnings=true)
         i += 1
@@ -220,7 +222,6 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
         status = solve(m.linear_model, suppress_warnings=true)
-        mpb_lp = internalmodel(m.linear_model)
 
         if status != :Optimal # give up
             return m.status = status
@@ -255,6 +256,8 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         end
     end
 
+    m.soltime = time() - start
+
     if m.iter >= m.params.iter_cap
         status = :UserLimit
     end
@@ -285,4 +288,4 @@ MathProgBase.getobjval(m::KatanaNonlinearModel) = getobjectivevalue(m.linear_mod
 # any auxiliary variables will need to be filtered from this at some point
 MathProgBase.getsolution(m::KatanaNonlinearModel) = MathProgBase.getsolution(internalmodel(m.linear_model))
 
-
+MathProgBase.getsolvetime(m::KatanaNonlinearModel) = m.soltime
