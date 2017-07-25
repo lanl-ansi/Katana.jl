@@ -85,6 +85,11 @@ function MathProgBase.loadproblem!(
 
     # set up LP variables
     @variable(m.linear_model, l_var[i] <= x[i=1:num_var] <= u_var[i])
+    vertex = fill(NaN, num_var) # may need a vertex of the variables' bounds polytope
+    status = solve(m.linear_model, suppress_warnings=true)
+    if status == :Optimal
+        vertex = MathProgBase.getsolution(internalmodel(m.linear_model))
+    end
 
     # initialise other fields of the KatanaNonlinearModel
     m.num_var = num_var
@@ -130,14 +135,28 @@ function MathProgBase.loadproblem!(
         @objective(m.linear_model, sense, y)
 
         # determine bounds on epigraph constraint and add to constraints
-        #   for Max, we have t <= f(x) aka f(x) - t >= 0
-        #   for Min, we have t >= f(x) aka f(x) - t <= 0
+        #   for Max, we have y <= f(x) aka f(x) - y >= 0
+        #   for Min, we have y >= f(x) aka f(x) - y <= 0
         l_obj, u_obj = sense == :Max ? (0.0, Inf) : (-Inf, 0.0)
         push!(m.l_constr, l_obj)
         push!(m.u_constr, u_obj)
         m.num_constr += 1
-
         push!(m.nlconstr_ixs, m.num_constr) # add new constraint to list of NL indices
+
+        # we can actually introduce a "decent" bound on t by exploiting the
+        # convexity of f, assuming all other problem variables x are upper- and lower-bounded
+        # 1. solve LP consisting of variable bounds on x, no objective, to compute vertex x*
+        #       - this was done earlier, before adding linear constraints
+        # 2. at x*, compute f(x*) and a hyperplane tangent to that point
+        #       - this is of course done by our cutting-plane algorithm!
+        if any(isnan, vertex)
+            Base.warn("Problem variables insufficiently bounded!")
+        else
+            push!(vertex, MathProgBase.eval_f(d, vertex))
+            cut = gencut(fsep, vertex, m.num_constr)
+            round_coefs(cut, m.params.cut_coef_rng)
+            _addcut(m, cut, l_obj, u_obj)
+        end
 
         d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1) # wrap d
     end
