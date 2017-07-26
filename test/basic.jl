@@ -36,9 +36,9 @@
         #println("Katana+GLPK Solve: $katana_val, $katana_x, $katana_y")
         #println("")
 
-        @test isapprox(katana_val, ipopt_val, atol=opt_tol)
-        @test isapprox(katana_x, ipopt_x, atol=sol_tol)
-        @test isapprox(katana_y, ipopt_y, atol=sol_tol)
+        @test isapprox(katana_val, ipopt_val, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(katana_x, ipopt_x, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(katana_y, ipopt_y, atol=sol_atol, rtol=sol_rtol)
     end
 
     @testset "fixpoint convergence" begin
@@ -72,9 +72,9 @@
         #println("Katana+GLPK Solve: $katana_val, $katana_x, $katana_y")
         #println("")
 
-        @test isapprox(katana_val, ipopt_val, atol=opt_tol)
-        @test isapprox(katana_x, ipopt_x, atol=sol_tol)
-        @test isapprox(katana_y, ipopt_y, atol=sol_tol)
+        @test isapprox(katana_val, ipopt_val, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(katana_x, ipopt_x, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(katana_y, ipopt_y, atol=sol_atol, rtol=sol_rtol)
     end
 
     @testset "lifting of nonlinear objective function" begin
@@ -96,8 +96,8 @@
         #println("Katana+GLPK Solve: $(getobjectivevalue(m)), $(getvalue(x)), $(getvalue(y))")
         #println("")
 
-        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_tol)
-        @test isapprox(getvalue(x), 1.0, atol=sol_tol)
-        @test isapprox(getvalue(y), 2.0, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 1.0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 2.0, atol=sol_atol, rtol=sol_rtol)
     end
 end

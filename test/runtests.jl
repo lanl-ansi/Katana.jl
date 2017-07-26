@@ -12,8 +12,11 @@ if Pkg.installed("Gurobi") == nothing
 end
 using Katana
 
-opt_tol = 1e-2
-sol_tol = 1e-2
+opt_rtol = 1e-6
+opt_atol = 1e-6
+
+sol_rtol = 1e-3
+sol_atol = 1e-3
 
 ipopt = IpoptSolver(print_level=0)
 
