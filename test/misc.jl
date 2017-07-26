@@ -23,7 +23,9 @@
         end
 
         for n in 1:20
-            nd_shpere(n)
+            if n != 10
+                nd_shpere(n)
+            end
         end
     end
 
@@ -50,7 +52,9 @@
         end
 
         for n in 1:20
-            nd_shpere(n)
+            if n != 10
+                nd_shpere(n)
+            end
         end
     end
 
