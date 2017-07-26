@@ -1,5 +1,8 @@
-using Base.Test
+using Logging
+# suppress warnings during testing
+Logging.configure(level=ERROR)
 
+using Base.Test
 using JuMP
 
 using Ipopt
