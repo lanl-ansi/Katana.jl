@@ -20,9 +20,9 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), -2.0430107680954848, atol=opt_tol)
-        @test isapprox(getvalue(x), -2.0430107680954848, atol=sol_tol)
-        @test isapprox(getvalue(y), -0.4301075068564087, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), -2.0430107680954848, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), -2.0430107680954848, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), -0.4301075068564087, atol=sol_atol, rtol=sol_rtol)
         #TODO add check that Katana generates no cuts
     end
 
@@ -43,9 +43,9 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_tol)
-        @test isapprox(getvalue(x), 1.0, atol=sol_tol)
-        @test isapprox(getvalue(y), 2.0, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 1.0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 2.0, atol=sol_atol, rtol=sol_rtol)
         #TODO add check that Katana generates no cuts, is solver natively supports the objective
     end
 
@@ -67,9 +67,9 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 3.9655172067026196, atol=opt_tol)
-        @test isapprox(getvalue(x), 2.4137930845761546, atol=sol_tol)
-        @test isapprox(getvalue(y), 1.5517241221264648, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 3.9655172067026196, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 2.4137930845761546, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 1.5517241221264648, atol=sol_atol, rtol=sol_rtol)
     end
 
     # a.k.a. 002_02
@@ -90,9 +90,9 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_tol)
-        @test isapprox(getvalue(x), 3.0, atol=sol_tol)
-        @test isapprox(getvalue(y), 2.0, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 3.0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 2.0, atol=sol_atol, rtol=sol_rtol)
         #TODO add check that Katana generates no cuts, is solver natively supports the objective
     end
 end
