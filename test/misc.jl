@@ -25,9 +25,7 @@
         end
 
         for n in 1:20
-            if n != 10
-                nd_shpere(n)
-            end
+            nd_shpere(n)
         end
     end
 

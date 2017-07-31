@@ -232,7 +232,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         i += 1
     end
 
-    if i == m.params.presolve_cap
+    if status == :Unbounded # if it's still unbounded
         Base.warn("Katana could not resolve unbounded LP")
         return m.status = status
     end
