@@ -68,7 +68,6 @@ end
 function _addcut(m::KatanaNonlinearModel, cut::AffExpr, lb::Float64, ub::Float64)
     c = cut.constant
     newconstr = LinearConstraint(cut, lb-c, ub-c)
-    println(newconstr)
     cref = JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
     m.numcuts += 1
     m.features.VisData && push!(m.linear_cuts, cref)
@@ -199,10 +198,10 @@ function round_coefs( cut::AffExpr, cut_coef_rng::Float64)
     end
 end
 
-function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt)
+function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt, max_viol)
     avg = cuts_lastprnt/(iter_lastprnt*m.num_nlconstr)
     # TODO for now, number of active cuts is same as number of cuts since we don't dynamically remove cuts yet
-    @printf("%-10d %-15d %-15d %-20.2f %-15d\n", m.iter, m.numcuts, cuts_lastprnt, avg, m.numcuts)
+    @printf("%-10d %-15d %-15d %-20d %-20.2f %-15d\n", m.iter, m.numcuts, cuts_lastprnt, max_viol, avg, m.numcuts)
 end
 
 function MathProgBase.optimize!(m::KatanaNonlinearModel)
@@ -235,11 +234,12 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     end
 
     if m.params.log_level > 0
-        @printf("%-10s %-15s %-15s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Avg constr. viol.", "Current cuts")
+        @printf("%-10s %-15s %-15s %-20s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Max constr. viol.", "Avg constr. viol.", "Current cuts")
     end
 
     allsat = false
     cuts_lastprnt = 0 # number of cuts since last printout
+    max_viol = 0
     while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
         status = solve(m.linear_model, suppress_warnings=true)
@@ -254,25 +254,29 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         precompute!(m.params.separator, xstar)
         allsat = true # base case
 
+        cuts_viol = 0
         for i in m.nlconstr_ixs # iterate only over NL constraints, possibly including epigraph constraint
             sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
             if !sat # if constraint not satisfied, call separator API to generate the cut
                 cut = gencut(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
                 round_coefs(cut, m.params.cut_coef_rng)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
-                cuts_lastprnt += 1
+                cuts_viol += 1
             end
 
             allsat &= sat # loop condition: each constraint must be satisfied
         end
+        max_viol = max(max_viol, cuts_viol)
+        cuts_lastprnt += cuts_viol
 
         if m.params.log_level > 0
             r = m.iter % m.params.log_level
             if r == 0
-                print_stats(m, m.params.log_level, cuts_lastprnt)
+                print_stats(m, m.params.log_level, cuts_lastprnt, max_viol)
                 cuts_lastprnt = 0
-            elseif allsat
-                print_stats(m, r, cuts_lastprnt)
+                max_viol = 0
+            elseif allsat # print on last iteration also
+                print_stats(m, r, cuts_lastprnt, max_viol)
             end
         end
     end
