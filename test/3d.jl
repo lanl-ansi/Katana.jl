@@ -15,10 +15,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), -3/sqrt(3), atol=opt_tol)
-        @test isapprox(getvalue(x), 1/sqrt(3), atol=sol_tol)
-        @test isapprox(getvalue(y), 1/sqrt(3), atol=sol_tol)
-        @test isapprox(getvalue(z), 1/sqrt(3), atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), -3/sqrt(3), atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
     end
 
     # a.k.a. 201_02
@@ -35,10 +35,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), -1, atol=opt_tol)
-        @test isapprox(getvalue(x), 1, atol=sol_tol)
-        @test isapprox(getvalue(y), 0, atol=sol_tol)
-        @test isapprox(getvalue(z), 0, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), -1, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 1, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 0, atol=sol_atol, rtol=sol_rtol)
     end
 
 
@@ -57,10 +57,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), -1, atol=opt_tol)
-        @test isapprox(getvalue(x), 0.0, atol=sol_tol)
-        @test isapprox(getvalue(y), 0.0, atol=sol_tol)
-        @test isapprox(getvalue(z), 1.0, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), -1, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 0.0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 0.0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 1.0, atol=sol_atol, rtol=sol_rtol)
     end
 
     # a.k.a. 202_02
@@ -78,10 +78,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_tol)
-        @test isapprox(getvalue(x), 0.0, atol=sol_tol)
-        @test isapprox(getvalue(y), 0.0, atol=sol_tol)
-        @test isapprox(getvalue(z), 0.0, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 0.0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 0.0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 0.0, atol=sol_atol, rtol=sol_rtol)
     end
 
     # a.k.a. 202_03
@@ -99,10 +99,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), -9/4, atol=opt_tol)
-        @test isapprox(getvalue(x), 1/4, atol=sol_tol)
-        @test isapprox(getvalue(y), 1/4, atol=sol_tol)
-        @test isapprox(getvalue(z), 7/8, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), -9/4, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 1/4, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 1/4, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 7/8, atol=sol_atol, rtol=sol_rtol)
     end
 
     # a.k.a. 202_04
@@ -122,10 +122,10 @@
 #
 #        @test status == :Optimal
 #        # TODO, figure out why ipopt does not ensure 1e-8 on this case
-#        @test isapprox(getobjectivevalue(m), -1/4, atol=1e-7)
-#        @test isapprox(getvalue(x), -1/4, atol=sol_tol)
-#        @test isapprox(getvalue(y), -1/4, atol=sol_tol)
-#        @test isapprox(getvalue(z),  1/8, atol=sol_tol)
+#        @test isapprox(getobjectivevalue(m), -1/4, rtol=1e-7)
+#        @test isapprox(getvalue(x), -1/4, atol=sol_atol, rtol=sol_rtol)
+#        @test isapprox(getvalue(y), -1/4, atol=sol_atol, rtol=sol_rtol)
+#        @test isapprox(getvalue(z),  1/8, atol=sol_atol, rtol=sol_rtol)
 #    end
 
     # a.k.a. 202_05
@@ -143,10 +143,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), -1.0, atol=opt_tol)
-        @test isapprox(getvalue(x), -1/2, atol=sol_tol)
-        @test isapprox(getvalue(y), -1/2, atol=sol_tol)
-        @test isapprox(getvalue(z), 1/2, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), -1.0, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), -1/2, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), -1/2, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 1/2, atol=sol_atol, rtol=sol_rtol)
     end
 
 
@@ -165,10 +165,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), -1/sqrt(2), atol=opt_tol)
-        @test isapprox(getvalue(x), -sqrt(1/8), atol=sol_tol)
-        @test isapprox(getvalue(y), -sqrt(1/8), atol=sol_tol)
-        @test isapprox(getvalue(z), 3/4, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), -1/sqrt(2), atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), -sqrt(1/8), atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), -sqrt(1/8), atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 3/4, atol=sol_atol, rtol=sol_rtol)
     end
 
     # not supported in JuMP 0.17, try with JuMP 1.0+
@@ -186,10 +186,10 @@
     #    status = solve(m)
 
     #    @test status == :Optimal
-    #    @test isapprox(getobjectivevalue(m), -1/sqrt(2), atol=opt_tol)
-    #    @test isapprox(getvalue(x), -sqrt(1/8), atol=sol_tol)
-    #    @test isapprox(getvalue(y), -sqrt(1/8), atol=sol_tol)
-    #    @test isapprox(getvalue(z), 3/4, atol=sol_tol)
+    #    @test isapprox(getobjectivevalue(m), -1/sqrt(2), atol=opt_atol, rtol=opt_rtol)
+    #    @test isapprox(getvalue(x), -sqrt(1/8), atol=sol_atol, rtol=sol_rtol)
+    #    @test isapprox(getvalue(y), -sqrt(1/8), atol=sol_atol, rtol=sol_rtol)
+    #    @test isapprox(getvalue(z), 3/4, atol=sol_atol, rtol=sol_rtol)
     #end
 
     # a.k.a. 204_01
@@ -208,10 +208,10 @@
 #        status = solve(m)
 #
 #        @test status == :Optimal
-#        @test isapprox(getobjectivevalue(m), -1.2071067837918394, atol=opt_tol)
-#        @test isapprox(getvalue(x), 0.353553392657669, atol=sol_tol)
-#        @test isapprox(getvalue(y), 0.8535533911341705, atol=sol_tol)
-#        @test isapprox(getvalue(z), 0.14644661317207716, atol=sol_tol)
+#        @test isapprox(getobjectivevalue(m), -1.2071067837918394, atol=opt_atol, rtol=opt_rtol)
+#        @test isapprox(getvalue(x), 0.353553392657669, atol=sol_atol, rtol=sol_rtol)
+#        @test isapprox(getvalue(y), 0.8535533911341705, atol=sol_atol, rtol=sol_rtol)
+#        @test isapprox(getvalue(z), 0.14644661317207716, atol=sol_atol, rtol=sol_rtol)
 #    end
 
 
@@ -231,10 +231,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 1.7912878443121907, atol=opt_tol)
-        @test isapprox(getvalue(x), 0.0, atol=sol_tol)
-        @test isapprox(getvalue(y), 1.7912878443121907, atol=sol_tol)
-        @test isapprox(getvalue(z), 1.7912878443121907, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 1.7912878443121907, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 0.0, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 1.7912878443121907, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 1.7912878443121907, atol=sol_atol, rtol=sol_rtol)
     end
 
 
@@ -257,10 +257,10 @@
 #
 #        @test status == :Optimal
 #        # TODO, figure out why ipopt does not ensure 1e-8 on this case
-#        @test isapprox(getobjectivevalue(m), 4.0, atol=1e-7)
-#        @test isapprox(getvalue(x), 1.0, atol=sol_tol)
-#        @test isapprox(getvalue(y), 1.0, atol=1e-7)
-#        @test isapprox(getvalue(z), 1.0, atol=1e-7)
+#        @test isapprox(getobjectivevalue(m), 4.0, rtol=1e-7)
+#        @test isapprox(getvalue(x), 1.0, atol=sol_atol, rtol=sol_rtol)
+#        @test isapprox(getvalue(y), 1.0, rtol=1e-7)
+#        @test isapprox(getvalue(z), 1.0, rtol=1e-7)
 #    end
 
 
@@ -278,10 +278,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_tol)
-        @test isapprox(getvalue(x), 1/2, atol=sol_tol)
-        @test isapprox(getvalue(y), 1/2, atol=sol_tol)
-        @test isapprox(getvalue(z), 1/2, atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 0.0, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 1/2, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 1/2, atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 1/2, atol=sol_atol, rtol=sol_rtol)
     end
 
     # a.k.a. 210_02
@@ -298,10 +298,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 0.535898380052066, atol=opt_tol)
-        @test isapprox(getvalue(x), 1/sqrt(3), atol=sol_tol)
-        @test isapprox(getvalue(y), 1/sqrt(3), atol=sol_tol)
-        @test isapprox(getvalue(z), 1/sqrt(3), atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 0.535898380052066, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
     end
 
     # a.k.a. 210_03
@@ -318,10 +318,10 @@
         status = solve(m)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 0.535898380052066, atol=opt_tol)
-        @test isapprox(getvalue(x), 1/sqrt(3), atol=sol_tol)
-        @test isapprox(getvalue(y), 1/sqrt(3), atol=sol_tol)
-        @test isapprox(getvalue(z), 1/sqrt(3), atol=sol_tol)
+        @test isapprox(getobjectivevalue(m), 0.535898380052066, atol=opt_atol, rtol=opt_rtol)
+        @test isapprox(getvalue(x), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(y), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
+        @test isapprox(getvalue(z), 1/sqrt(3), atol=sol_atol, rtol=sol_rtol)
     end
 
 end
