@@ -58,6 +58,8 @@ type KatanaFirstOrderSeparator <: AbstractKatanaSeparator
     num_var :: Int
     num_constr :: Int
 
+    f_tol :: Float64
+
     # first-order derivative information:
     xstar :: Vector{Float64}
     g     :: Vector{Float64} # vector of constraint values returned by MathProgBase.eval_g()
@@ -75,6 +77,7 @@ function initialize!(sep          :: KatanaFirstOrderSeparator,
                      linear_model :: JuMP.Model,
                      num_var      :: Int,
                      num_constr   :: Int,
+                     f_tol        :: Float64,
                      oracle       :: MathProgBase.AbstractNLPEvaluator)
     sep.linear_model = linear_model
 
@@ -97,6 +100,7 @@ function initialize!(sep          :: KatanaFirstOrderSeparator,
 
     sep.num_var = num_var
     sep.num_constr = num_constr
+    sep.f_tol = f_tol
 end
 
 # Implements precompute! for KatanaFirstOrderSeparators. This evaluates every constraint at the point xstar and computes
@@ -110,4 +114,4 @@ end
 
 gencut(sep::KatanaFirstOrderSeparator, xstar, i) = sep.algo(sep, xstar, i)
 
-isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub, f_tol) = (sep.g[i] >= lb - f_tol) && (sep.g[i] <= ub + f_tol)
+isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub) = (sep.g[i] >= lb - sep.f_tol) && (sep.g[i] <= ub + sep.f_tol)

@@ -68,6 +68,7 @@ end
 function _addcut(m::KatanaNonlinearModel, cut::AffExpr, lb::Float64, ub::Float64)
     c = cut.constant
     newconstr = LinearConstraint(cut, lb-c, ub-c)
+    println(newconstr)
     cref = JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
     m.numcuts += 1
     m.features.VisData && push!(m.linear_cuts, cref)
@@ -104,7 +105,7 @@ function MathProgBase.loadproblem!(
     #  the original linear objective as a constraint
     fsep = KatanaFirstOrderSeparator() # with default algo
     epi_d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1) # wrap d
-    initialize!(fsep, m.linear_model, num_var+1, num_constr+1, epi_d)
+    initialize!(fsep, m.linear_model, num_var+1, num_constr+1, m.params.f_tol, epi_d)
     pt = zeros(num_var+1)
     precompute!(fsep, pt)
     for i=1:num_constr
@@ -115,7 +116,6 @@ function MathProgBase.loadproblem!(
             push!(m.nlconstr_ixs, i) # keep track of these NL constraints for later
         end
     end
-    m.num_nlconstr = length(m.nlconstr_ixs)
 
     # if nonlinear objective, create new variable and bound it by the objective
     m.objislinear = MathProgBase.isobjlinear(d)
@@ -160,10 +160,11 @@ function MathProgBase.loadproblem!(
 
         d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1) # wrap d
     end
+    m.num_nlconstr = length(m.nlconstr_ixs)
 
     # initialise the AbstractKatanaSeparator passed to the model
     sep = m.params.separator
-    initialize!(sep, m.linear_model, m.num_var, m.num_constr, d)
+    initialize!(sep, m.linear_model, m.num_var, m.num_constr, m.params.f_tol, d)
 end
 
 function boundroutine(m::KatanaNonlinearModel, ray)
@@ -175,9 +176,10 @@ function boundroutine(m::KatanaNonlinearModel, ray)
         allsat = true
         precompute!(m.params.separator, x)
         for i in m.nlconstr_ixs
-            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
+            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
             if !sat
-                cut = gencut(m.params.separator, x, i)
+                cut = gencut(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
+                round_coefs(cut, m.params.cut_coef_rng)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
             end
             allsat &= sat
@@ -253,9 +255,9 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         allsat = true # base case
 
         for i in m.nlconstr_ixs # iterate only over NL constraints, possibly including epigraph constraint
-            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
+            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
             if !sat # if constraint not satisfied, call separator API to generate the cut
-                cut = gencut(m.params.separator, xstar, i)
+                cut = gencut(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
                 round_coefs(cut, m.params.cut_coef_rng)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
                 cuts_lastprnt += 1
