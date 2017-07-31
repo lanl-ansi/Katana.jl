@@ -235,7 +235,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     end
 
     if m.params.log_level > 0
-        @printf("%-10s %-15s %-15s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Avg constr. viol.", "Active cuts")
+        @printf("%-10s %-15s %-15s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Avg constr. viol.", "Current cuts")
     end
 
     allsat = false
