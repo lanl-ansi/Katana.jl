@@ -198,6 +198,10 @@ function round_coefs( cut::AffExpr, cut_coef_rng::Float64)
     end
 end
 
+function print_header()
+    @printf("%-10s %-15s %-15s %-20s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Max constr. viol.", "Avg constr. viol.", "Current cuts")
+end
+
 function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt, max_viol)
     avg = cuts_lastprnt/(iter_lastprnt*m.num_nlconstr)
     # TODO for now, number of active cuts is same as number of cuts since we don't dynamically remove cuts yet
@@ -234,7 +238,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     end
 
     if m.params.log_level > 0
-        @printf("%-10s %-15s %-15s %-20s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Max constr. viol.", "Avg constr. viol.", "Current cuts")
+        print_header()
     end
 
     allsat = false
@@ -272,6 +276,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         if m.params.log_level > 0
             r = m.iter % m.params.log_level
             if r == 0
+                (m.iter % (m.params.log_level*50) == 0) && print_header()
                 print_stats(m, m.params.log_level, cuts_lastprnt, max_viol)
                 cuts_lastprnt = 0
                 max_viol = 0
