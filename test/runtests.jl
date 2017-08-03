@@ -10,6 +10,7 @@ using GLPKMathProgInterface
 if Pkg.installed("Gurobi") == nothing
     using Gurobi
 end
+
 using Katana
 
 opt_rtol = 1e-6
@@ -21,6 +22,8 @@ sol_atol = 1e-3
 ipopt = IpoptSolver(print_level=0)
 
 katana = KatanaSolver(GLPKSolverLP(), log_level=0)
+
+# useful for debugging algorithm correctness
 #katana = KatanaSolver(GurobiSolver(OutputFlag=0))
 
 solver = katana
