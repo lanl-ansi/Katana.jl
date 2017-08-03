@@ -21,11 +21,11 @@ initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, ora
 """
     gencut!(sep::AbstractKatanaSeparator, xstar, i)
 
-Generate a cut given an LP solution `xstar` for constraint `i`. This method MUST be overridden for a subtype of `AbstractKatanaSeparator`.
+Generate a cut given some input `a` for constraint `i`. This method MUST be overridden for a subtype of `AbstractKatanaSeparator`.
 
 Return a JuMP.AffExpr object.
 """
-gencut(sep::AbstractKatanaSeparator, xstar, i) = error("Not implemented: Katana.gencut!")
+gencut(sep::AbstractKatanaSeparator, a, i) = error("Not implemented: Katana.gencut!")
 
 """
     isconstrsat(sep::AbstractKatanaSeparator, i, lb, ub, f_tol)
@@ -44,6 +44,8 @@ certain information once for all constraints using a solution from the internal 
 `xstar` is the solution vector from the `KatanaNonlinearModel`'s LP model
 """
 precompute!(sep::AbstractKatanaSeparator, xstar) = nothing
+
+### --- First Order Separator Implementation --- #
 
 """
 An implementation of `AbstractKatanaSeparator` for any first-order cutting algorithm.
@@ -115,3 +117,46 @@ end
 gencut(sep::KatanaFirstOrderSeparator, xstar, i) = sep.algo(sep, xstar, i)
 
 isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub) = (sep.g[i] >= lb - sep.f_tol) && (sep.g[i] <= ub + sep.f_tol)
+
+# --- Projection-based Separator Implementation --- #
+
+"""
+An implementation of `AbstractKatanaSeparator` that projects a point x_0 to the convex surface and generates a cut
+tangent to the constraint.
+"""
+type KatanaProjectionSeparator <: AbstractKatanaSeparator
+    fsep :: KatanaFirstOrderSeparator
+    projnlps :: Vector{JuMP.Model}
+    solver :: MathProgBase.AbstractMathProgSolver
+    algo
+
+    function KatanaProjectionSeparator(solver,algo)
+        fs = KatanaFirstOrderSeparator() # use linear_oa_cut algo
+        s = new()
+        s.algo = algo
+        s.fsep = fs
+    end
+    KatanaProjectionSeparator(solver) = KatanaProjectionSeparator(solver,nlp_proj_cut)
+end
+
+function initialize!(sep          :: KatanaProjectionSeparator,
+                     linear_model :: JuMP.Model,
+                     num_var      :: Int,
+                     num_constr   :: Int,
+                     f_tol        :: Float64,
+                     oracle       :: MathProgBase.AbstractNLPEvaluator)
+
+    initialize!(sep.fsep, linear_model, num_var, num_constr, f_tol, oracle)
+    sep.projnlps = [JuMP.Model() for i=1:num_constr]
+    for m in sep.projnlps
+        @variable(m, v[1:num_var])
+        # look into ReverseDiffSparse.register_multivariate_operator (see JuMP nlp.jl:1394)
+        # we may be able to just pass in the nlp evaluator directly - or wrap it to index the constraint properly
+    end
+end
+
+function precompute!(sep::KatanaFirstOrderSeparator, xstar)
+    precompute!(sep.fsep, xstar)
+
+
+end
