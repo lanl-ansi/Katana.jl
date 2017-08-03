@@ -7,7 +7,7 @@ using JuMP
 
 using Ipopt
 using GLPKMathProgInterface
-if Pkg.installed("Gurobi") == nothing
+if Pkg.installed("Gurobi") != nothing
     using Gurobi
 end
 
