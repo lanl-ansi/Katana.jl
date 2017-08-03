@@ -35,6 +35,6 @@ script:
 after_success:
   - echo $TRAVIS_JULIA_VERSION
 
-  - export REPO_TOKEN=56b6becd-4dfe-4f0c-bdc2-5b50293f9f01; julia -e 'using Coverage; cd(Pkg.dir("Katana")); Codecov.submit(process_folder("."));'
+  - julia -e 'using Coverage; cd(Pkg.dir("Katana")); Codecov.submit(process_folder("."));'
 
   - julia -e 'cd(Pkg.dir("Katana")); include(joinpath("docs", "make.jl"))'
