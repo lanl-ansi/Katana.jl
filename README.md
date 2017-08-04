@@ -2,7 +2,7 @@
 
 Dev: [![Build Status](https://travis-ci.org/lanl-ansi/Katana.jl.svg?branch=master)](https://travis-ci.org/lanl-ansi/Katana.jl) [![codecov](https://codecov.io/gh/lanl-ansi/Katana.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/lanl-ansi/Katana.jl) [![](https://img.shields.io/badge/docs-latest-blue.svg)](https://lanl-ansi.github.io/Katana.jl/latest)
 
-Katana.jl is a MathProgBase solver for Convex NLPs.  The Katana.jl solves NLP using an LP solver and generating cutting-planes.  Katana.jl is suited for large-scale Convex NLPs, where the most of the constraints are linear and the nonlinear constraints are sparse.
+Katana.jl is a MathProgBase solver for Convex NonLinearPrograms (NLPs).  Katana.jl solves NLPs via the [Extended Cutting-Plane (ECP)](http://epubs.siam.org/doi/10.1137/0108053) method, which combines an Linear Programming solver with a cutting-plane generator to solve Convex NLPs.  Katana.jl is well suited for large-scale Convex NLPs where most of the constraints are linear and the nonlinear constraints are sparse.
 
 
 ## Installation
