@@ -20,11 +20,11 @@ MathProgBase.isconstrlinear(d::EpigraphNLPEvaluator) = MathProgBase.isconstrline
 MathProgBase.obj_expr(d::EpigraphNLPEvaluator) = MathProgBase.obj_expr(d.nlpeval) # TODO technically objective is f(x) = x_n
 
 # TODO implement any feature requested in order to be a true pass-through to the underlying NLP evaluator
-MathProgBase.features_available(d::EpigraphNLPEvaluator) = [:Grad, :Jac]
+MathProgBase.features_available(d::EpigraphNLPEvaluator) = [:Grad, :Jac, :ExprGraph]
 
 function MathProgBase.initialize(d::EpigraphNLPEvaluator, requested_features)
     for feat in requested_features
-        if !(feat in MathProgBase.features_available(d))
+        if !(feat in MathProgBase.features_available(d) && feat in MathProgBase.features_available(d.nlpeval))
             error("Unsupported feature $feat")
         end
     end

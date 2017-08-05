@@ -17,3 +17,22 @@ function linear_oa_cut(sep::KatanaFirstOrderSeparator, a, i::Int)
     AffExpr(v, coefs, b) # return an affine expression
 end
 
+# curried function with slurped arguments, will it work?
+diff_norm(x0...) = (x...) -> sqrt(sum( (x[i] - x0[i])^2 for i=1:length(x0) ))
+
+function nlp_proj_cut(sep::KatanaProjectionSeparator, a, i::Int)
+    m = sep.projnlps[i]
+
+    x = [JuMP.Variable(m, i) for i=1:sep.num_var]
+    @NLobjective(m, :Min, sqrt(sum( (x[i] - sep.xstar[i])^2 for i=1:sep.num_var )))
+
+    status = solve(m) # solve projection NLP
+    @assert status == :Optimal
+
+    xstar = MathProgBase.getsolution(internalmodel(m))
+    println(xstar)
+    precompute!(sep.fsep, xstar) # this does have to evaluate every constraint
+                                 # in the future, could setup an fsep for every constraint
+                                 # using an AbstractNLPEvaluator for each projnlp model
+    gencut(sep.fsep, xstar, i)
+end

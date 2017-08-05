@@ -1,4 +1,4 @@
-export AbstractKatanaSeparator, KatanaFirstOrderSeparator, initialize!, precompute!, gencut!
+export AbstractKatanaSeparator, KatanaFirstOrderSeparator, KatanaProjectionSeparator, initialize!, precompute!, gencut!
 
 using Compat
 
@@ -83,7 +83,7 @@ function initialize!(sep          :: KatanaFirstOrderSeparator,
                      oracle       :: MathProgBase.AbstractNLPEvaluator)
     sep.linear_model = linear_model
 
-    MathProgBase.initialize(oracle, [:Grad, :Jac])
+    MathProgBase.initialize(oracle, [:Grad, :Jac, :ExprGraph])
     sep.oracle = oracle
 
     # map info of Jacobian J_g to allow faster lookups of nonzero entries by row:
@@ -130,11 +130,17 @@ type KatanaProjectionSeparator <: AbstractKatanaSeparator
     solver :: MathProgBase.AbstractMathProgSolver
     algo
 
+    num_var :: Int
+
+    xstar :: Vector{Float64}
+
     function KatanaProjectionSeparator(solver,algo)
         fs = KatanaFirstOrderSeparator() # use linear_oa_cut algo
         s = new()
         s.algo = algo
         s.fsep = fs
+        s.solver = solver
+        s
     end
     KatanaProjectionSeparator(solver) = KatanaProjectionSeparator(solver,nlp_proj_cut)
 end
@@ -147,16 +153,45 @@ function initialize!(sep          :: KatanaProjectionSeparator,
                      oracle       :: MathProgBase.AbstractNLPEvaluator)
 
     initialize!(sep.fsep, linear_model, num_var, num_constr, f_tol, oracle)
-    sep.projnlps = [JuMP.Model() for i=1:num_constr]
-    for m in sep.projnlps
-        @variable(m, v[1:num_var])
+    sep.num_var = num_var
+    sep.projnlps = [JuMP.Model(solver=sep.solver) for i=1:num_constr]
+    for (i,m) in enumerate(sep.projnlps)
+        @variable(m, x[1:num_var])
+        ex = MathProgBase.constr_expr(oracle, i)
+#        JuMP.addNLconstraint(m, MathProgBase.constr_expr(oracle, i))
+        JuMP.initNLP(m)
+        nd, values = JuMP.ReverseDiffSparse.expr_to_nodedata(ex.args[2],m.nlpdata.user_operators)
+        nlex = JuMP.NonlinearExprData(nd, values)
+
+        # stolen shamelessly from JuMP's implementation of addNLconstraint:
+        op = ex.args[1]
+        if op == :(==)
+            lb = 0.0
+            ub = 0.0
+        elseif op == :(<=)
+            lb = -Inf
+            ub = 0.0
+        elseif op == :(>=)
+            lb = 0.0
+            ub = Inf
+        else
+            error("unexpected comparison operator")
+        end
+        
+        c = JuMP.NonlinearConstraint(nlex, lb, ub)
+        push!(m.nlpdata.nlconstr, c)
+
         # look into ReverseDiffSparse.register_multivariate_operator (see JuMP nlp.jl:1394)
         # we may be able to just pass in the nlp evaluator directly - or wrap it to index the constraint properly
     end
 end
 
-function precompute!(sep::KatanaFirstOrderSeparator, xstar)
-    precompute!(sep.fsep, xstar)
-
-
+function precompute!(sep::KatanaProjectionSeparator, xstar)
+    sep.xstar = xstar
+    precompute!(sep.fsep, xstar) # do this so that isconstrsat will evaluate correctly
 end
+
+gencut(sep::KatanaProjectionSeparator, xstar, i) = sep.algo(sep, xstar, i)
+
+isconstrsat(sep::KatanaProjectionSeparator, i, lb, ub) = isconstrsat(sep.fsep, i, lb, ub)
+

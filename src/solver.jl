@@ -41,5 +41,4 @@ function KatanaSolver(lp_solver::MathProgBase.AbstractMathProgSolver;
     return KatanaSolver(lp_solver, features, KatanaModelParams(f_tol, iter_cap, presolve_cap, log_level, cut_coef_rng, separator))
 end
 
-# this bridge should make lp/qp models act like nlp models
-MathProgBase.LinearQuadraticModel(s::KatanaSolver) = MathProgBase.NonlinearToLPQPBridge(MathProgBase.NonlinearModel(s))
+MathProgBase.LinearQuadraticModel(s::KatanaSolver) = error("LinearQuadraticModel unsupported on this feature branch, use NonlinearModel")
