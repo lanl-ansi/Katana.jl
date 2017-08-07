@@ -18,6 +18,12 @@ MathProgBase.isobjlinear(d::EpigraphNLPEvaluator) = MathProgBase.isobjlinear(d.n
 MathProgBase.isobjquadratic(d::EpigraphNLPEvaluator) = MathProgBase.isobjquadratic(d.nlpeval)
 MathProgBase.isconstrlinear(d::EpigraphNLPEvaluator) = MathProgBase.isconstrlinear(d.nlpeval)
 MathProgBase.obj_expr(d::EpigraphNLPEvaluator) = MathProgBase.obj_expr(d.nlpeval) # TODO technically objective is f(x) = x_n
+function MathProgBase.constr_expr(d::EpigraphNLPEvaluator, i::Int)
+    if i == d.num_constr
+        return MathProgBase.obj_expr(d.nlpeval)
+    end
+    MathProgBase.constr_expr(d.nlpeval, i)
+end
 
 # TODO implement any feature requested in order to be a true pass-through to the underlying NLP evaluator
 MathProgBase.features_available(d::EpigraphNLPEvaluator) = [:Grad, :Jac, :ExprGraph]
