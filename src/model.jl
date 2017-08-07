@@ -103,7 +103,7 @@ function MathProgBase.loadproblem!(
     #  on the objective as well, if the objective is linear, in order to recreate
     #  the original linear objective as a constraint
     fsep = KatanaFirstOrderSeparator() # with default algo
-    epi_d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1) # wrap d
+    epi_d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1, :(==)) # wrap d
     initialize!(fsep, m.linear_model, num_var+1, num_constr+1, m.params.f_tol, epi_d)
     pt = zeros(num_var+1)
     precompute!(fsep, pt)
@@ -157,7 +157,7 @@ function MathProgBase.loadproblem!(
             _addcut(m, cut, l_obj, u_obj)
         end
 
-        d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1) # wrap d
+        d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1, (sense == :Max ? :(>=) : :(<=))) # wrap d
     end
     m.num_nlconstr = length(m.nlconstr_ixs)
 

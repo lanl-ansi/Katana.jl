@@ -156,7 +156,8 @@ function initialize!(sep          :: KatanaProjectionSeparator,
     sep.num_var = num_var
     sep.projnlps = [JuMP.Model(solver=sep.solver) for i=1:num_constr]
     for (i,m) in enumerate(sep.projnlps)
-        @variable(m, x[1:num_var])
+        lpvars = [Variable(linear_model,i) for i=1:num_var] # copy bounds on problem variables
+        @variable(m, x[i=1:num_var], lowerbound=getlowerbound(lpvars[i]), upperbound=getupperbound(lpvars[i]))
         ex = MathProgBase.constr_expr(oracle, i)
 #        JuMP.addNLconstraint(m, MathProgBase.constr_expr(oracle, i))
         JuMP.initNLP(m)

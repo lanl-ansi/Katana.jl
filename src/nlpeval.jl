@@ -8,10 +8,12 @@ type EpigraphNLPEvaluator <: MathProgBase.AbstractNLPEvaluator
     num_var :: Int # number of variables including any auxiliary variable
     num_constr :: Int # number of constraints including any constraint on objective
 
+    cmp_op :: Symbol
+
     ∇f :: Vector{Float64} # don't bother reallocating space for this on each call to eval_jac_g
 end
 
-EpigraphNLPEvaluator(d, num_var, num_constr) = EpigraphNLPEvaluator(d,num_var,num_constr,zeros(num_var))
+EpigraphNLPEvaluator(d, num_var, num_constr, cmp_op) = EpigraphNLPEvaluator(d,num_var,num_constr,cmp_op,zeros(num_var))
 
 # pass-through
 MathProgBase.isobjlinear(d::EpigraphNLPEvaluator) = MathProgBase.isobjlinear(d.nlpeval)
@@ -20,7 +22,7 @@ MathProgBase.isconstrlinear(d::EpigraphNLPEvaluator) = MathProgBase.isconstrline
 MathProgBase.obj_expr(d::EpigraphNLPEvaluator) = MathProgBase.obj_expr(d.nlpeval) # TODO technically objective is f(x) = x_n
 function MathProgBase.constr_expr(d::EpigraphNLPEvaluator, i::Int)
     if i == d.num_constr
-        return MathProgBase.obj_expr(d.nlpeval)
+        return Expr(:call, d.cmp_op, MathProgBase.obj_expr(d.nlpeval), 0)
     end
     MathProgBase.constr_expr(d.nlpeval, i)
 end
