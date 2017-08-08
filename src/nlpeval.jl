@@ -22,7 +22,8 @@ MathProgBase.isconstrlinear(d::EpigraphNLPEvaluator) = MathProgBase.isconstrline
 MathProgBase.obj_expr(d::EpigraphNLPEvaluator) = MathProgBase.obj_expr(d.nlpeval) # TODO technically objective is f(x) = x_n
 function MathProgBase.constr_expr(d::EpigraphNLPEvaluator, i::Int)
     if i == d.num_constr
-        return Expr(:call, d.cmp_op, MathProgBase.obj_expr(d.nlpeval), 0)
+        ex = Expr(:call, :-, MathProgBase.obj_expr(d.nlpeval), parse("x[$(d.num_var)]"))
+        return Expr(:call, d.cmp_op, ex, 0)
     end
     MathProgBase.constr_expr(d.nlpeval, i)
 end

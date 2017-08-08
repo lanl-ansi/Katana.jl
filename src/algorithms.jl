@@ -17,11 +17,18 @@ function linear_oa_cut(sep::KatanaFirstOrderSeparator, a, i::Int)
     AffExpr(v, coefs, b) # return an affine expression
 end
 
-# curried function with slurped arguments, will it work?
-diff_norm(x0...) = (x...) -> sqrt(sum( (x[i] - x0[i])^2 for i=1:length(x0) ))
+function _densifygrad(aff::AffExpr, N::Int)
+    ∇gi = zeros(N)
+    for (v,c) in zip(aff.vars, aff.coeffs)
+        ∇gi[v.col] += c # densify gradient
+    end
+    return ∇gi
+end
+
 
 function nlp_proj_cut(sep::KatanaProjectionSeparator, a, i::Int)
     m = sep.projnlps[i]
+    fsep = sep.linseps[i]
 
     x = [JuMP.Variable(m, i) for i=1:sep.num_var]
     @NLobjective(m, :Min, sqrt(sum( (x[i] - sep.xstar[i])^2 for i=1:sep.num_var )))
@@ -31,8 +38,20 @@ function nlp_proj_cut(sep::KatanaProjectionSeparator, a, i::Int)
 
     xstar = MathProgBase.getsolution(internalmodel(m))
     println(xstar)
-    precompute!(sep.fsep, xstar) # this does have to evaluate every constraint
+    precompute!(fsep, xstar) # this does have to evaluate every constraint
                                  # in the future, could setup an fsep for every constraint
                                  # using an AbstractNLPEvaluator for each projnlp model
-    gencut(sep.fsep, xstar, i)
+    ∇g = _densifygrad(gencut(fsep, xstar, 1), sep.num_var)
+    U = nullspace(convert(Matrix{Float64}, ∇g')) # orthonormal basis along the tangent hyperplane
+    cuts = Vector{AffExpr}()
+    for i=1:size(U,2) # dimension of nullspace is n-1
+        u = U[:,i]
+        for s=[-1,1] # need to move in both directions
+            xprime = xstar + s*u*sep.eps # move episilon along this vector
+            precompute!(fsep, xprime)
+            push!(cuts, gencut(fsep, xprime, 1)) # generate a cut at this point
+        end
+    end
+
+    return cuts
 end

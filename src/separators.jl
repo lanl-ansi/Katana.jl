@@ -21,11 +21,15 @@ initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, ora
 """
     gencut!(sep::AbstractKatanaSeparator, xstar, i)
 
-Generate a cut given some input `a` for constraint `i`. This method MUST be overridden for a subtype of `AbstractKatanaSeparator`.
+Generate a list of cuts given some input `a` for constraint `i`.
+This method MUST be overridden for a subtype of `AbstractKatanaSeparator`.
 
 Return a JuMP.AffExpr object.
 """
-gencut(sep::AbstractKatanaSeparator, a, i) = error("Not implemented: Katana.gencut!")
+gencuts(sep::AbstractKatanaSeparator, a, i) = error("Not implemented: Katana.gencuts!")
+
+# compatibility
+gencut(sep::AbstractKatanaSeparator, a, i) = (cs = gencuts(sep,a,i); cs[1])
 
 """
     isconstrsat(sep::AbstractKatanaSeparator, i, lb, ub, f_tol)
@@ -114,7 +118,7 @@ function precompute!(sep::KatanaFirstOrderSeparator, xstar)
     sep.xstar = xstar # ensure that the x* point matches the gradient information that is precomputed
 end
 
-gencut(sep::KatanaFirstOrderSeparator, xstar, i) = sep.algo(sep, xstar, i)
+gencuts(sep::KatanaFirstOrderSeparator, xstar, i) = [sep.algo(sep,xstar,i)]
 
 isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub) = (sep.g[i] >= lb - sep.f_tol) && (sep.g[i] <= ub + sep.f_tol)
 
@@ -126,23 +130,24 @@ tangent to the constraint.
 """
 type KatanaProjectionSeparator <: AbstractKatanaSeparator
     fsep :: KatanaFirstOrderSeparator
+    linseps :: Vector{KatanaFirstOrderSeparator}
     projnlps :: Vector{JuMP.Model}
     solver :: MathProgBase.AbstractMathProgSolver
     algo
 
     num_var :: Int
+    eps :: Float64 # epsilon
 
     xstar :: Vector{Float64}
 
-    function KatanaProjectionSeparator(solver,algo)
-        fs = KatanaFirstOrderSeparator() # use linear_oa_cut algo
+    function KatanaProjectionSeparator(solver,algo,eps)
         s = new()
         s.algo = algo
-        s.fsep = fs
         s.solver = solver
+        s.eps = eps
         s
     end
-    KatanaProjectionSeparator(solver) = KatanaProjectionSeparator(solver,nlp_proj_cut)
+    KatanaProjectionSeparator(solver) = KatanaProjectionSeparator(solver,nlp_proj_cut,1e-6)
 end
 
 function initialize!(sep          :: KatanaProjectionSeparator,
@@ -151,15 +156,14 @@ function initialize!(sep          :: KatanaProjectionSeparator,
                      num_constr   :: Int,
                      f_tol        :: Float64,
                      oracle       :: MathProgBase.AbstractNLPEvaluator)
-
-    initialize!(sep.fsep, linear_model, num_var, num_constr, f_tol, oracle)
+    MathProgBase.initialize(oracle, [:ExprGraph])
     sep.num_var = num_var
     sep.projnlps = [JuMP.Model(solver=sep.solver) for i=1:num_constr]
+    sep.linseps = [KatanaFirstOrderSeparator() for i=1:num_constr] # separator for each constraint
     for (i,m) in enumerate(sep.projnlps)
         lpvars = [Variable(linear_model,i) for i=1:num_var] # copy bounds on problem variables
         @variable(m, x[i=1:num_var], lowerbound=getlowerbound(lpvars[i]), upperbound=getupperbound(lpvars[i]))
         ex = MathProgBase.constr_expr(oracle, i)
-#        JuMP.addNLconstraint(m, MathProgBase.constr_expr(oracle, i))
         JuMP.initNLP(m)
         nd, values = JuMP.ReverseDiffSparse.expr_to_nodedata(ex.args[2],m.nlpdata.user_operators)
         nlex = JuMP.NonlinearExprData(nd, values)
@@ -182,17 +186,20 @@ function initialize!(sep          :: KatanaProjectionSeparator,
         c = JuMP.NonlinearConstraint(nlex, lb, ub)
         push!(m.nlpdata.nlconstr, c)
 
-        # look into ReverseDiffSparse.register_multivariate_operator (see JuMP nlp.jl:1394)
-        # we may be able to just pass in the nlp evaluator directly - or wrap it to index the constraint properly
+        # initialise an NLPEvaluator for each constraint
+        d = JuMP.NLPEvaluator(m)
+        initialize!(sep.linseps[i], linear_model, num_var, num_constr, f_tol, d)
     end
 end
 
 function precompute!(sep::KatanaProjectionSeparator, xstar)
     sep.xstar = xstar
-    precompute!(sep.fsep, xstar) # do this so that isconstrsat will evaluate correctly
+    for fs in sep.linseps
+        precompute!(fs, xstar)
+    end
 end
 
-gencut(sep::KatanaProjectionSeparator, xstar, i) = sep.algo(sep, xstar, i)
+gencuts(sep::KatanaProjectionSeparator, xstar, i) = sep.algo(sep, xstar, i)
 
-isconstrsat(sep::KatanaProjectionSeparator, i, lb, ub) = isconstrsat(sep.fsep, i, lb, ub)
+isconstrsat(sep::KatanaProjectionSeparator, i, lb, ub) = isconstrsat(sep.linseps[i], 1, lb, ub)
 

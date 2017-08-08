@@ -259,19 +259,24 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         allsat = true # base case
 
         cuts_viol = 0
+        cuts_added = 0
         for i in m.nlconstr_ixs # iterate only over NL constraints, possibly including epigraph constraint
             sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
             if !sat # if constraint not satisfied, call separator API to generate the cut
-                cut = gencut(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
-                round_coefs(cut, m.params.cut_coef_rng)
-                _addcut(m, cut, m.l_constr[i], m.u_constr[i])
+                cuts = gencuts(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
+                for cut in cuts
+                    println(cut)
+                    round_coefs(cut, m.params.cut_coef_rng)
+                    _addcut(m, cut, m.l_constr[i], m.u_constr[i])
+                    cuts_added += 1
+                end
                 cuts_viol += 1
             end
 
             allsat &= sat # loop condition: each constraint must be satisfied
         end
         max_viol = max(max_viol, cuts_viol)
-        cuts_lastprnt += cuts_viol
+        cuts_lastprnt += cuts_added
 
         if m.params.log_level > 0
             r = m.iter % m.params.log_level
