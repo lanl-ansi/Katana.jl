@@ -21,7 +21,7 @@ sol_atol = 1e-3
 
 ipopt = IpoptSolver(print_level=0)
 
-katana = KatanaSolver(GLPKSolverLP(), log_level=0)
+katana = KatanaSolver(GLPKSolverLP(), log_level=0, separator=KatanaProjectionSeparator(ipopt))
 
 # useful for debugging algorithm correctness
 #katana = KatanaSolver(GurobiSolver(OutputFlag=0))

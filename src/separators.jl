@@ -135,6 +135,8 @@ type KatanaProjectionSeparator <: AbstractKatanaSeparator
     solver :: MathProgBase.AbstractMathProgSolver
     algo
 
+    oracle :: MathProgBase.AbstractNLPEvaluator
+
     num_var :: Int
     eps :: Float64 # epsilon
 
@@ -157,6 +159,7 @@ function initialize!(sep          :: KatanaProjectionSeparator,
                      f_tol        :: Float64,
                      oracle       :: MathProgBase.AbstractNLPEvaluator)
     MathProgBase.initialize(oracle, [:ExprGraph])
+    sep.oracle = oracle
     sep.num_var = num_var
     sep.projnlps = [JuMP.Model(solver=sep.solver) for i=1:num_constr]
     sep.linseps = [KatanaFirstOrderSeparator() for i=1:num_constr] # separator for each constraint

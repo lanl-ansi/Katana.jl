@@ -13,6 +13,7 @@
         @constraint(m, 3*x+9*y >= -10)
         @constraint(m, 10*x-y >= -20)
         @constraint(m, -x+2*y <= 8)
+        @NLconstraint(m, x >= -1000) # force NonlinearModel
 
         setsolver(m, ipopt)
         status = solve(m)
@@ -48,7 +49,7 @@
         @variable(m, -2 <= y <= 2)
 
         @objective(m, Min, -x-y)
-        @constraint(m, x^2 + y^2 <= 1.0)
+        @NLconstraint(m, x^2 + y^2 <= 1.0)
 
         setsolver(m, ipopt)
         status = solve(m)
@@ -83,7 +84,7 @@
         @variable(m, x)
         @variable(m, y)
 
-        @objective(m, Min, (x-1)^2 + (y-2)^2)
+        @NLobjective(m, Min, (x-1)^2 + (y-2)^2)
         @constraint(m, x+y <= 5)
         @constraint(m, 2*x-y <= 3)
         @constraint(m, 3*x+9*y >= -10)

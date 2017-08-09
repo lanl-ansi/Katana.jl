@@ -10,7 +10,7 @@
         @variable(m, z)
 
         @objective(m, Min, -(x+y+z))
-        @constraint(m, x^2 + y^2 + z^2 <= 1.0)
+        @NLconstraint(m, x^2 + y^2 + z^2 <= 1.0)
 
         status = solve(m)
 
@@ -30,7 +30,7 @@
         @variable(m, z)
 
         @objective(m, Min, -x)
-        @constraint(m, x^2 + y^2 + z^2 <= 1.0)
+        @NLconstraint(m, x^2 + y^2 + z^2 <= 1.0)
 
         status = solve(m)
 
@@ -51,8 +51,8 @@
         @variable(m, z)
 
         @objective(m, Min, -z)
-        @constraint(m, x^2 + y^2 <= z)
-        @constraint(m, x^2 + y^2 <= -z+1)
+        @NLconstraint(m, x^2 + y^2 <= z)
+        @NLconstraint(m, x^2 + y^2 <= -z+1)
 
         status = solve(m)
 
@@ -72,8 +72,8 @@
         @variable(m, z)
 
         @objective(m, Min, z)
-        @constraint(m, x^2 + y^2 <= z)
-        @constraint(m, x^2 + y^2 <= -z+1)
+        @NLconstraint(m, x^2 + y^2 <= z)
+        @NLconstraint(m, x^2 + y^2 <= -z+1)
 
         status = solve(m)
 
@@ -93,8 +93,8 @@
         @variable(m, z)
 
         @objective(m, Min, -(x+y+2*z))
-        @constraint(m, x^2 + y^2 <= z)
-        @constraint(m, x^2 + y^2 <= -z+1)
+        @NLconstraint(m, x^2 + y^2 <= z)
+        @NLconstraint(m, x^2 + y^2 <= -z+1)
 
         status = solve(m)
 
@@ -137,8 +137,8 @@
         @variable(m, z)
 
         @objective(m, Min, x+y)
-        @constraint(m, x^2 + y^2 <= z)
-        @constraint(m, x^2 + y^2 <= -z+1)
+        @NLconstraint(m, x^2 + y^2 <= z)
+        @NLconstraint(m, x^2 + y^2 <= -z+1)
 
         status = solve(m)
 
@@ -160,7 +160,7 @@
 
         @objective(m, Min, x+y)
         @NLconstraint(m, sqrt(x^2 + y^2) <= z-0.25)
-        @constraint(m, x^2 + y^2 <= -z+1)
+        @NLconstraint(m, x^2 + y^2 <= -z+1)
 
         status = solve(m)
 
@@ -226,7 +226,7 @@
         @objective(m, Max, y)
         @NLconstraint(m, y*e^(x/y) <= z)
         @NLconstraint(m, y*e^(-x/y) <= z)
-        @constraint(m, x^2 + y^2 <= -z+5)
+        @NLconstraint(m, x^2 + y^2 <= -z+5)
 
         status = solve(m)
 
@@ -272,7 +272,7 @@
         @variable(m, y)
         @variable(m, z)
 
-        @objective(m, Min, (x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2)
+        @NLobjective(m, Min, (x-0.5)^2 + (y-0.5)^2 + (z-0.5)^2)
         @NLconstraint(m, x^2 + y^2 + z^2 <= 1.0)
 
         status = solve(m)
@@ -292,7 +292,7 @@
         @variable(m, y)
         @variable(m, z)
 
-        @objective(m, Min, (x-1.0)^2 + (y-1.0)^2 + (z-1.0)^2)
+        @NLobjective(m, Min, (x-1.0)^2 + (y-1.0)^2 + (z-1.0)^2)
         @NLconstraint(m, x^2 + y^2 + z^2 <= 1.0)
 
         status = solve(m)
@@ -312,7 +312,7 @@
         @variable(m, y, start=1.0)
         @variable(m, z, start=0.5)
 
-        @objective(m, Min, (x-1.0)^2 + (y-1.0)^2 + (z-1.0)^2)
+        @NLobjective(m, Min, (x-1.0)^2 + (y-1.0)^2 + (z-1.0)^2)
         @NLconstraint(m, x^2 + y^2 + z^2 <= 1.0)
 
         status = solve(m)

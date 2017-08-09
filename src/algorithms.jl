@@ -30,6 +30,9 @@ function nlp_proj_cut(sep::KatanaProjectionSeparator, a, i::Int)
     m = sep.projnlps[i]
     fsep = sep.linseps[i]
 
+    # linear constraints should be approximated by the FirstOrderSeparator in loadproblem!
+    @assert !MathProgBase.isconstrlinear(sep.oracle, i)
+
     x = [JuMP.Variable(m, i) for i=1:sep.num_var]
     @NLobjective(m, :Min, sqrt(sum( (x[i] - sep.xstar[i])^2 for i=1:sep.num_var )))
 

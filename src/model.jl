@@ -265,7 +265,6 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
             if !sat # if constraint not satisfied, call separator API to generate the cut
                 cuts = gencuts(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
                 for cut in cuts
-                    println(cut)
                     round_coefs(cut, m.params.cut_coef_rng)
                     _addcut(m, cut, m.l_constr[i], m.u_constr[i])
                     cuts_added += 1
