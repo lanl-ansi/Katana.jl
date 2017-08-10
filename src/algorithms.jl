@@ -34,7 +34,7 @@ function nlp_proj_cut(sep::KatanaProjectionSeparator, a, i::Int)
     @assert !MathProgBase.isconstrlinear(sep.oracle, i)
 
     x = [JuMP.Variable(m, i) for i=1:sep.num_var]
-    @NLobjective(m, :Min, sqrt(sum( (x[i] - sep.xstar[i])^2 for i=1:sep.num_var )))
+    @NLobjective(m, :Min, sum( (x[i] - sep.xstar[i])^2 for i=1:sep.num_var ))
 
     status = solve(m) # solve projection NLP
     @assert status == :Optimal
