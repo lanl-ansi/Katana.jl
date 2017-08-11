@@ -244,6 +244,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     allsat = false
     cuts_lastprnt = 0 # number of cuts since last printout
     max_viol = 0
+    obj_prev = Inf
     while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
         status = solve(m.linear_model, suppress_warnings=true)
@@ -284,6 +285,15 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
                 print_stats(m, r, cuts_lastprnt, max_viol)
             end
         end
+
+        # check convergence of objective value (if obj_eps is <0 ignore this feature)
+        obj = MathProgBase.getobjval(mpb_lp)
+        obj_delta = abs((obj_prev - obj)/obj)
+        if obj_delta <= m.params.obj_eps
+            println(obj)
+            break
+        end
+        obj_prev = obj
     end
 
     m.soltime = time() - start
