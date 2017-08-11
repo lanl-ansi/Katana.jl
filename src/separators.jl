@@ -180,7 +180,7 @@ function initialize!(sep          :: KatanaProjectionSeparator,
     sep.num_var = num_var
     sep.projnlps = [JuMP.Model(solver=sep.solver) for i=1:num_constr]
     cutsalgo = sep.ortho_cuts ? orthonormal_oa_cuts : linear_oa_cuts
-    sep.linseps = [KatanaFirstOrderSeparator(algorithm=cutsalgo) for i=1:num_constr] # separator for each constraint
+    sep.linseps = [KatanaFirstOrderSeparator(algorithm=cutsalgo,epsilon=sep.eps) for i=1:num_constr] # separator for each constraint
     for (i,m) in enumerate(sep.projnlps)
         lpvars = [Variable(linear_model,i) for i=1:num_var] # copy bounds on problem variables
         @variable(m, x[i=1:num_var], lowerbound=getlowerbound(lpvars[i]), upperbound=getupperbound(lpvars[i]))
