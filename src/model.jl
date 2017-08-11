@@ -177,9 +177,11 @@ function boundroutine(m::KatanaNonlinearModel, ray)
         for i in m.nlconstr_ixs
             sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
             if !sat
-                cut = gencut(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
-                round_coefs(cut, m.params.cut_coef_rng)
-                _addcut(m, cut, m.l_constr[i], m.u_constr[i])
+                cuts = gencuts(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
+                for cut in cuts
+                    round_coefs(cut, m.params.cut_coef_rng)
+                    _addcut(m, cut, m.l_constr[i], m.u_constr[i])
+                end
             end
             allsat &= sat
         end

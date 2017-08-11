@@ -53,6 +53,10 @@ precompute!(sep::AbstractKatanaSeparator, xstar) = nothing
 
 """
 An implementation of `AbstractKatanaSeparator` for any first-order cutting algorithm.
+
+Available cut-generation methods:
+ `linear_oa_cuts` - given a point x0 from an LP solve, generate a cutting plane around that point
+ `orthonormal_oa_cuts` - given a point x0 from an LP solve, move `epsilon` amounts in orthogonal directions tangent to the constraint surface and generate cuts at those points.
 """
 type KatanaFirstOrderSeparator <: AbstractKatanaSeparator
     sp_cols :: Vector{Vector{Int}} # column indices in Jacobian by row
@@ -72,9 +76,14 @@ type KatanaFirstOrderSeparator <: AbstractKatanaSeparator
     jac   :: Vector{Float64} # jacobian sparse matrix
 
     algo # cutting-plane generator that takes: separator, point and constraint index and returns an AffExpr
+    eps :: Float64
 
-    KatanaFirstOrderSeparator(algo) = (s = new(); s.algo = algo; s)
-    KatanaFirstOrderSeparator() = KatanaFirstOrderSeparator(linear_oa_cut)
+    KatanaFirstOrderSeparator(algo, eps) = (s = new(); s.algo = algo; s.eps=eps; s)
+end
+
+# set algorithm to orthonormal_oa_cuts to generate 2n cuts along the tangent hyperplane
+function KatanaFirstOrderSeparator( ; algorithm=linear_oa_cuts, epsilon=1e-6)
+    KatanaFirstOrderSeparator(algorithm, epsilon)
 end
 
 # Implements initialize! for KatanaFirstOrderSeparators. This initialises the oracle with necessary features
@@ -118,7 +127,7 @@ function precompute!(sep::KatanaFirstOrderSeparator, xstar)
     sep.xstar = xstar # ensure that the x* point matches the gradient information that is precomputed
 end
 
-gencuts(sep::KatanaFirstOrderSeparator, xstar, i) = [sep.algo(sep,xstar,i)]
+gencuts(sep::KatanaFirstOrderSeparator, xstar, i) = sep.algo(sep,xstar,i)
 
 isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub) = (sep.g[i] >= lb - sep.f_tol) && (sep.g[i] <= ub + sep.f_tol)
 
@@ -127,6 +136,9 @@ isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub) = (sep.g[i] >= lb - sep.f
 """
 An implementation of `AbstractKatanaSeparator` that projects a point x_0 to the convex surface and generates a cut
 tangent to the constraint.
+
+Available cut-generation methods:
+    `nlp_proj_cuts` - Given a point x0 from an LP solve, find the nearest point x* on the constraint surface at which to generate cut(s)
 """
 type KatanaProjectionSeparator <: AbstractKatanaSeparator
     fsep :: KatanaFirstOrderSeparator
@@ -135,6 +147,8 @@ type KatanaProjectionSeparator <: AbstractKatanaSeparator
     solver :: MathProgBase.AbstractMathProgSolver
     algo
 
+    ortho_cuts :: Bool
+
     oracle :: MathProgBase.AbstractNLPEvaluator
 
     num_var :: Int
@@ -142,14 +156,17 @@ type KatanaProjectionSeparator <: AbstractKatanaSeparator
 
     xstar :: Vector{Float64}
 
-    function KatanaProjectionSeparator(solver,algo,eps)
+    function KatanaProjectionSeparator(solver,algo,eps,ortho_cuts)
         s = new()
         s.algo = algo
         s.solver = solver
         s.eps = eps
+        s.ortho_cuts = ortho_cuts
         s
     end
-    KatanaProjectionSeparator(solver) = KatanaProjectionSeparator(solver,nlp_proj_cut,1e-6)
+end
+function KatanaProjectionSeparator(solver ; algorithm=nlp_proj_cut, orthonormal_cuts=true, epsilon=1e-6)
+    KatanaProjectionSeparator(solver,algorithm,epsilon,orthonormal_cuts)
 end
 
 function initialize!(sep          :: KatanaProjectionSeparator,
@@ -162,7 +179,8 @@ function initialize!(sep          :: KatanaProjectionSeparator,
     sep.oracle = oracle
     sep.num_var = num_var
     sep.projnlps = [JuMP.Model(solver=sep.solver) for i=1:num_constr]
-    sep.linseps = [KatanaFirstOrderSeparator() for i=1:num_constr] # separator for each constraint
+    cutsalgo = sep.ortho_cuts ? orthonormal_oa_cuts : linear_oa_cuts
+    sep.linseps = [KatanaFirstOrderSeparator(algorithm=cutsalgo) for i=1:num_constr] # separator for each constraint
     for (i,m) in enumerate(sep.projnlps)
         lpvars = [Variable(linear_model,i) for i=1:num_var] # copy bounds on problem variables
         @variable(m, x[i=1:num_var], lowerbound=getlowerbound(lpvars[i]), upperbound=getupperbound(lpvars[i]))
