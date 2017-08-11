@@ -290,7 +290,6 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         obj = MathProgBase.getobjval(mpb_lp)
         obj_delta = abs((obj_prev - obj)/obj)
         if obj_delta <= m.params.obj_eps
-            println(obj)
             break
         end
         obj_prev = obj
