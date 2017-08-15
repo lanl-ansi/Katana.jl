@@ -16,6 +16,7 @@ immutable KatanaModelParams
     log_level    :: Int     # printout frequency (every iter_freq iterations)
     cut_coef_rng :: Float64 # max coefficient range per cut
     obj_eps      :: Float64 # stopping criteria on objective delta
+    max_cut_age  :: Int     # maximum number of iterations a cut can be inactive for
     separator    :: AbstractKatanaSeparator # separation oracle
 end
 

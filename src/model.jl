@@ -26,6 +26,9 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     nlconstr_ixs :: Vector{Int64} # indices of the NL constraints
     num_nlconstr :: Int
 
+    # TODO: update visualisation stuff
+    cut_ages  :: Dict{Int,Int} # map constraint index to age
+
     # visualisation logging
     linear_cuts  :: Vector{ConstraintRef{Model,LinearConstraint}}
     lp_sols      :: Vector{Vector{Float64}}
@@ -52,6 +55,7 @@ function KatanaNonlinearModel(lps::MathProgBase.AbstractMathProgSolver, feats::V
     end
 
     katana.nlconstr_ixs = Vector{Int}()
+    katana.cut_ages = Dict{Int,Int}()
     katana.linear_cuts = Vector{ConstraintRef{Model,LinearConstraint}}()
     katana.lp_sols = Vector{Vector{Float64}}()
 
@@ -198,6 +202,42 @@ function round_coefs( cut::AffExpr, cut_coef_rng::Float64)
     end
 end
 
+# remove cuts that have been inactive for more than a certain number of iterations
+# returns the set of inactive constraints on this iteration
+function remove_old_cuts(m::KatanaNonlinearModel)
+    old_cuts = Vector{Int}()
+    for k in keys(m.cut_ages)
+        if m.cut_ages[k] > m.params.max_cut_age
+            # delete constraint in JuMP model
+            deleteat!(m.linear_model.linconstr, k)
+
+            push!(old_cuts, k)
+            m.numcuts -= 1
+        end
+    end
+#    println("Removing $(length(old_cuts)) cuts from linear model")
+    mpbmod = internalmodel(m.linear_model)
+
+    # remove these cuts from our list of cuts:
+    for c in old_cuts
+        delete!(m.cut_ages, c)
+    end
+
+    # enumerate inactive cuts on this iteration
+    dualsol = MathProgBase.getconstrduals(mpbmod)
+    inactive_constrs = Set{Int}()
+    for (i,s) in enumerate(dualsol)
+        if s == 0
+            push!(inactive_constrs, i) # keep track of these
+            m.cut_ages[i] = get(m.cut_ages, i, 0) + 1
+        end
+    end
+
+    # now we can modify the MPB model
+    !isempty(old_cuts) && MathProgBase.delconstrs!(mpbmod, old_cuts)
+    inactive_constrs
+end
+
 function print_header()
     @printf("%-10s %-15s %-15s %-20s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Max constr. viol.", "Avg constr. viol.", "Current cuts")
 end
@@ -248,6 +288,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
         status = solve(m.linear_model, suppress_warnings=true)
+        remove_old_cuts(m)
 
         if status != :Optimal # give up
             return m.status = status
