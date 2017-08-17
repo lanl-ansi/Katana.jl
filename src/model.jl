@@ -236,13 +236,14 @@ function remove_old_cuts(m::KatanaNonlinearModel)
 end
 
 function print_header()
-    @printf("%-10s %-15s %-15s %-20s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Max constr. viol.", "Avg constr. viol.", "Current cuts")
+    @printf("%-10s %-15s %-15s %-20s %-20s %-15s\n", "Iteration", "Current cuts", "Cuts added", "Max constr. viol.", "Avg constr. viol.", "Active cuts")
 end
 
-function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt, max_viol, total_cuts)
+function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt, max_viol, inactive_cuts)
     avg = cuts_lastprnt/(iter_lastprnt*m.num_nlconstr)
+    active_cuts = m.numcuts - inactive_cuts
     # TODO for now, number of active cuts is same as number of cuts since we don't dynamically remove cuts yet
-    @printf("%-10d %-15d %-15d %-20d %-20.2f %-15d\n", m.iter, total_cuts, cuts_lastprnt, max_viol, avg, m.numcuts)
+    @printf("%-10d %-15d %-15d %-20d %-20.2f %-15d\n", m.iter, m.numcuts, cuts_lastprnt, max_viol, avg, active_cuts)
 end
 
 function MathProgBase.optimize!(m::KatanaNonlinearModel)
@@ -286,7 +287,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
     while !allsat && m.iter < m.params.iter_cap
         m.iter += 1
         status = solve(m.linear_model, suppress_warnings=true)
-        remove_old_cuts(m)
+        num_inactive_cuts = length(remove_old_cuts(m))
 
         if status != :Optimal # give up
             return m.status = status
@@ -318,11 +319,11 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
             r = m.iter % m.params.log_level
             if r == 0
                 (m.iter % (m.params.log_level*50) == 0) && print_header()
-                print_stats(m, m.params.log_level, cuts_lastprnt, max_viol, total_cuts)
+                print_stats(m, m.params.log_level, cuts_lastprnt, max_viol, num_inactive_cuts)
                 cuts_lastprnt = 0
                 max_viol = 0
             elseif allsat # print on last iteration also
-                print_stats(m, r, cuts_lastprnt, max_viol, total_cuts)
+                print_stats(m, r, cuts_lastprnt, max_viol, num_inactive_cuts)
             end
         end
 
