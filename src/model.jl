@@ -243,7 +243,7 @@ function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt, max_
     avg = cuts_lastprnt/(iter_lastprnt*m.num_nlconstr)
     active_cuts = m.numcuts - inactive_cuts
     # TODO for now, number of active cuts is same as number of cuts since we don't dynamically remove cuts yet
-    @printf("%-10d %-15d %-15d %-20d %-20.2f %-15d\n", m.iter, m.numcuts, cuts_lastprnt, max_viol, avg, active_cuts)
+    @printf("%-10d %-15d %-15d %-20d %-20.4f %-15d\n", m.iter, m.numcuts, cuts_lastprnt, max_viol, avg, active_cuts)
 end
 
 function MathProgBase.optimize!(m::KatanaNonlinearModel)
