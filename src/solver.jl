@@ -38,7 +38,7 @@ function KatanaSolver(lp_solver::MathProgBase.AbstractMathProgSolver;
                       log_level :: Int = 10,
                       iter_cap :: Int     = 10000,
                       obj_eps  :: Float64 = -1.0,
-                      max_cut_age :: Int = 50,
+                      max_cut_age :: Int = 20,
                       presolve_cap :: Int = 10)
     return KatanaSolver(lp_solver, features,
                         KatanaModelParams(f_tol, iter_cap, presolve_cap, log_level, cut_coef_rng, obj_eps, max_cut_age, separator))

@@ -27,7 +27,7 @@ type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     num_nlconstr :: Int
 
     # TODO: update visualisation stuff
-    cut_ages  :: Dict{Int,Int} # map constraint index to age
+    cut_pool     :: Vector{Int} # map constraint index to age (no. of iterations in a row marked inactive)
 
     # visualisation logging
     linear_cuts  :: Vector{ConstraintRef{Model,LinearConstraint}}
@@ -55,7 +55,7 @@ function KatanaNonlinearModel(lps::MathProgBase.AbstractMathProgSolver, feats::V
     end
 
     katana.nlconstr_ixs = Vector{Int}()
-    katana.cut_ages = Dict{Int,Int}()
+    katana.cut_pool= Vector{Int}()
     katana.linear_cuts = Vector{ConstraintRef{Model,LinearConstraint}}()
     katana.lp_sols = Vector{Vector{Float64}}()
 
@@ -74,6 +74,7 @@ function _addcut(m::KatanaNonlinearModel, cut::AffExpr, lb::Float64, ub::Float64
     newconstr = LinearConstraint(cut, lb-c, ub-c)
     cref = JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
     m.numcuts += 1
+    push!(m.cut_pool, 0)
     m.features.VisData && push!(m.linear_cuts, cref)
 end
 
@@ -205,33 +206,29 @@ end
 # remove cuts that have been inactive for more than a certain number of iterations
 # returns the set of inactive constraints on this iteration
 function remove_old_cuts(m::KatanaNonlinearModel)
-    old_cuts = Vector{Int}()
-    for k in keys(m.cut_ages)
-        if m.cut_ages[k] > m.params.max_cut_age
-            # delete constraint in JuMP model
-            deleteat!(m.linear_model.linconstr, k)
-
-            push!(old_cuts, k)
-            m.numcuts -= 1
-        end
-    end
-#    println("Removing $(length(old_cuts)) cuts from linear model")
     mpbmod = internalmodel(m.linear_model)
-
-    # remove these cuts from our list of cuts:
-    for c in old_cuts
-        delete!(m.cut_ages, c)
-    end
 
     # enumerate inactive cuts on this iteration
     dualsol = MathProgBase.getconstrduals(mpbmod)
     inactive_constrs = Set{Int}()
-    for (i,s) in enumerate(dualsol)
+    old_cuts = Vector{Int}()
+
+    for (c,s) in enumerate(dualsol)
         if s == 0
-            push!(inactive_constrs, i) # keep track of these
-            m.cut_ages[i] = get(m.cut_ages, i, 0) + 1
+            push!(inactive_constrs, c) # keep track of these
+            m.cut_pool[c] += 1 # increment age of this cut
+            if m.cut_pool[c] > m.params.max_cut_age
+                push!(old_cuts, c)
+                m.numcuts -= 1
+            end
+        else
+            m.cut_pool[c] = 0
         end
     end
+
+    # remove these cuts from model and cut pool
+    deleteat!(m.linear_model.linconstr, old_cuts)
+    deleteat!(m.cut_pool, old_cuts)
 
     # now we can modify the MPB model
     !isempty(old_cuts) && MathProgBase.delconstrs!(mpbmod, old_cuts)
@@ -242,10 +239,10 @@ function print_header()
     @printf("%-10s %-15s %-15s %-20s %-20s %-15s\n", "Iteration", "Total cuts", "Cuts added", "Max constr. viol.", "Avg constr. viol.", "Current cuts")
 end
 
-function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt, max_viol)
+function print_stats(m::KatanaNonlinearModel, iter_lastprnt, cuts_lastprnt, max_viol, total_cuts)
     avg = cuts_lastprnt/(iter_lastprnt*m.num_nlconstr)
     # TODO for now, number of active cuts is same as number of cuts since we don't dynamically remove cuts yet
-    @printf("%-10d %-15d %-15d %-20d %-20.2f %-15d\n", m.iter, m.numcuts, cuts_lastprnt, max_viol, avg, m.numcuts)
+    @printf("%-10d %-15d %-15d %-20d %-20.2f %-15d\n", m.iter, total_cuts, cuts_lastprnt, max_viol, avg, m.numcuts)
 end
 
 function MathProgBase.optimize!(m::KatanaNonlinearModel)
@@ -283,6 +280,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
 
     allsat = false
     cuts_lastprnt = 0 # number of cuts since last printout
+    total_cuts = m.numcuts
     max_viol = 0
     obj_prev = Inf
     while !allsat && m.iter < m.params.iter_cap
@@ -314,16 +312,17 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         end
         max_viol = max(max_viol, cuts_viol)
         cuts_lastprnt += cuts_viol
+        total_cuts += cuts_viol
 
         if m.params.log_level > 0
             r = m.iter % m.params.log_level
             if r == 0
                 (m.iter % (m.params.log_level*50) == 0) && print_header()
-                print_stats(m, m.params.log_level, cuts_lastprnt, max_viol)
+                print_stats(m, m.params.log_level, cuts_lastprnt, max_viol, total_cuts)
                 cuts_lastprnt = 0
                 max_viol = 0
             elseif allsat # print on last iteration also
-                print_stats(m, r, cuts_lastprnt, max_viol)
+                print_stats(m, r, cuts_lastprnt, max_viol, total_cuts)
             end
         end
 
