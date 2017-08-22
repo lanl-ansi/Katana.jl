@@ -4,7 +4,7 @@ end
 KatanaFeatures() = KatanaFeatures(false)
 
 """
-docs go here
+The MathProgBase non-linear model for Katana.
 """
 type KatanaNonlinearModel <: MathProgBase.AbstractNonlinearModel
     lp_solver    :: MathProgBase.AbstractMathProgSolver
@@ -109,7 +109,7 @@ function MathProgBase.loadproblem!(
     precompute!(fsep, pt)
     for i=1:num_constr
         if MathProgBase.isconstrlinear(d, i)
-            cut = gencut(fsep, pt, i)
+            cut = gencut(fsep, pt, (l_constr[i], u_constr[i]), i)
             _addcut(m, cut, l_constr[i], u_constr[i])
         else
             push!(m.nlconstr_ixs, i) # keep track of these NL constraints for later
@@ -121,7 +121,7 @@ function MathProgBase.loadproblem!(
     if m.objislinear
         m.params.log_level > 0 && println("objective is linear")
         # this 'cut' approximates the original linear objective exactly
-        cut = gencut(fsep, pt, num_constr+1) # get AffExpr for linear objective
+        cut = gencut(fsep, pt, (0,0), num_constr+1) # get AffExpr for linear objective
         @assert cut.vars[end].col == num_var+1
         pop!(cut.vars) # pop non-existant 'variable'
         pop!(cut.coeffs) # and its coefficient
@@ -152,7 +152,7 @@ function MathProgBase.loadproblem!(
             Base.warn("Problem variables insufficiently bounded!")
         else
             push!(vertex, MathProgBase.eval_f(d, vertex))
-            cut = gencut(fsep, vertex, m.num_constr)
+            cut = gencut(fsep, vertex, (l_obj, u_obj), m.num_constr)
             round_coefs(cut, m.params.cut_coef_rng)
             _addcut(m, cut, l_obj, u_obj)
         end
@@ -170,6 +170,8 @@ function boundroutine(m::KatanaNonlinearModel, ray)
     # bounding: binary search on unbounded ray until feasibility violated,
     #           at that point, we are outside the constraint surface - make a cut
     #           on the violated constraint(s)
+    # NB: this method only works if the feasible region intersects with a sphere of radius 4
+    #     around the origin.
     for n=2:1023
         x = (2.0^n)*ray
         allsat = true
@@ -177,7 +179,7 @@ function boundroutine(m::KatanaNonlinearModel, ray)
         for i in m.nlconstr_ixs
             sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
             if !sat
-                cut = gencut(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
+                cut = gencut(m.params.separator, x, (m.l_constr[i], m.u_constr[i]), i)
                 round_coefs(cut, m.params.cut_coef_rng)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
             end
@@ -224,7 +226,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
 
     mpb_lp = internalmodel(m.linear_model)
     i = 0
-    while status == :Unbounded && i < max(m.params.presolve_cap, m.num_var)
+    while status == :Unbounded && i < m.num_var
         ray = MathProgBase.getunboundedray(mpb_lp)
         m.params.log_level > 0 && println("Unbounded ray along: $ray")
         boundroutine(m, ray) # bound along unbounded ray of LP
@@ -263,7 +265,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         for i in m.nlconstr_ixs # iterate only over NL constraints, possibly including epigraph constraint
             sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
             if !sat # if constraint not satisfied, call separator API to generate the cut
-                cut = gencut(m.params.separator, (m.l_constr[i], m.u_constr[i]), i)
+                cut = gencut(m.params.separator, xstar, (m.l_constr[i], m.u_constr[i]), i)
                 round_coefs(cut, m.params.cut_coef_rng)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
                 cuts_viol += 1
@@ -318,7 +320,7 @@ numiters(m::KatanaNonlinearModel) = m.iter
 """
     numcuts(m::KatanaNonlinearModel)
 
-Returns the number of cuts added to the model
+Returns the number of linear cuts added to the model. Includes linear constraints initially present.
 """
 numcuts(m::KatanaNonlinearModel) = m.numcuts
 

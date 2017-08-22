@@ -1,6 +1,6 @@
 # this requires a first order separator for which first-order information near a point has been precomputed
 #  that means, `a` is not used, but exists for API compatibility
-function linear_oa_cut(sep::KatanaFirstOrderSeparator, a, i::Int)
+function linear_oa_cut(sep::KatanaFirstOrderSeparator, a, b, i::Int)
     # construct the affine expression from sparse gradient:
     #  g_i(a) + (x-a) ⋅ ∇g_i(a)
     v = Vector{JuMP.Variable}()

@@ -7,11 +7,12 @@ using Compat
 """
     initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, oracle::MathProgBase.AbstractNLPEvaluator)
 
-Initialise an instance of a subtype of `AbstractKatanaSeparator`. This method is called by `loadproblem!` and MUST be overridden.
+Initialise an instance of a subtype of `AbstractKatanaSeparator` with information about the KatanaNonlinearModel. This method is called by `loadproblem!` and MUST be overridden.
+
 `linear_model` is the internal linear model of the `KatanaNonlinearModel`.
 
 `num_var` is the number of solution variables, as passed by Katana. `num_constr` is the number of
-constraints in the problem, as passed by Katana. See solver implementation documentation for details.
+constraints in the problem, as passed by Katana. See solver implementation for details.
 
 `oracle` can be queried for first- and second- derivative information and must be initialised in this method (see MathProgBase
 documentation on nonlinear models).
@@ -21,17 +22,20 @@ initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, ora
 """
     gencut!(sep::AbstractKatanaSeparator, xstar, i)
 
-Generate a cut given an LP solution `xstar` for constraint `i`. This method MUST be overridden for a subtype of `AbstractKatanaSeparator`.
+Generate a cut given an LP solution `xstar` for constraint `i`. `bounds` is a 2-tuple of `(lb,ub)`. Since constraints are convex,
+one of the tuple bounds will be finite, and defines the level set of the constraint function.
+This method MUST be overridden for a subtype of `AbstractKatanaSeparator`. It is called by Katana as part of the solve routine.
 
 Return a JuMP.AffExpr object.
 """
-gencut(sep::AbstractKatanaSeparator, xstar, i) = error("Not implemented: Katana.gencut!")
+gencut(sep::AbstractKatanaSeparator, xstar, bounds, i) = error("Not implemented: Katana.gencut!")
 
 """
     isconstrsat(sep::AbstractKatanaSeparator, i, lb, ub, f_tol)
 
-Returns true if the ith constraint is satisfied for the given bounds and tolerance. This method MUST be overriden for a subtype of
-`AbstractKatanaSeparator` as querying evaluated constraints is implementation-dependent.
+Returns true if the ``i``th constraint is satisfied for the given bounds and tolerance.
+This method MUST be overriden for a subtype of `AbstractKatanaSeparator` as querying evaluated constraints is
+implementation-dependent.
 """
 isconstrsat(sep::AbstractKatanaSeparator, i, lb, ub, f_tol) = error("Not implemented: Katana.isconstrsat")
 
@@ -112,6 +116,6 @@ function precompute!(sep::KatanaFirstOrderSeparator, xstar)
     sep.xstar = xstar # ensure that the x* point matches the gradient information that is precomputed
 end
 
-gencut(sep::KatanaFirstOrderSeparator, xstar, i) = sep.algo(sep, xstar, i)
+gencut(sep::KatanaFirstOrderSeparator, xstar, bounds, i) = sep.algo(sep, xstar, bounds, i)
 
 isconstrsat(sep::KatanaFirstOrderSeparator, i, lb, ub) = (sep.g[i] >= lb - sep.f_tol) && (sep.g[i] <= ub + sep.f_tol)
