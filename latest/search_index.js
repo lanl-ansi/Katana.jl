@@ -13,7 +13,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Katana.jl Documentation",
     "category": "section",
-    "text": "TBD"
+    "text": "Katana.jl is a MathProgBase solver for Convex NonLinearPrograms (NLPs).  Katana.jl solves NLPs via the Extended Cutting-Plane (ECP) method, which combines an Linear Programming solver with a cutting-plane generator to solve Convex NLPs.  Katana.jl is well suited for large-scale Convex NLPs where most of the constraints are linear and the nonlinear constraints are sparse."
 },
 
 {
@@ -37,7 +37,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Library",
     "title": "Katana.KatanaSolver",
     "category": "Type",
-    "text": "docs go here\n\n\n\n"
+    "text": "A solver for convex NLPs that uses cutting-planes to approximate a convex feasible set.\n\n\n\n"
 },
 
 {
@@ -45,7 +45,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Library",
     "title": "Katana.KatanaSolver",
     "category": "Method",
-    "text": "KatanaSolver(lp_solver::MathProgBase.AbstractMathProgSolver;\n             separator = KatanaFirstOrderSeparator(),\n             features = Vector{Symbol}(),\n             f_tol = 1e-6,\n             cut_coef_rng = 1e9,\n             log_level = 10,\n             iter_cap = 10000)\n\nConstruct a KatanaSolver with feasibility tolerance f_tol, a maximum coefficient range per cut cut_coef_rng and an iteration cap specifying the maximum number of rounds of LP solves + cut generation in iter_cap. Print out solver progress every log_level number of iterations, or suppress output with log_level=0.\n\ncut_coef_rng is used to round-off close-to-zero coefficients in generated cuts.\n\nThe separator is any implementing subtype of AbstractKatanaSeparator. It serves as the separation oracle used by the solver. The default is a first order separator that generates a single Newton cut per constraint.\n\nThe features vector is a list of optional features to enable in the solver. Currently supported are\n\n:VisData - Internal model logs actions to be exported and visualised\n\n\n\n"
+    "text": "KatanaSolver(lp_solver :: MathProgBase.AbstractMathProgSolver;\n             separator = KatanaFirstOrderSeparator(),\n             features = Vector{Symbol}(),\n             f_tol :: Float64 = 1e-6,\n             cut_coef_rng :: Float64 = 1e9,\n             log_level :: Int = 10,\n             iter_cap :: Int = 10000,\n             obj_eps :: Float64 = -1.0)\n\nConstruct a KatanaSolver with feasibility tolerance f_tol, a maximum coefficient range per cut cut_coef_rng and an iteration cap specifying the maximum number of rounds of LP solves + cut generation in iter_cap. Print out solver progress every log_level number of iterations, or suppress output with log_level=0. Use obj_eps as a stopping criterion: when the objective function evaluated by the LP has changed by less than obj_eps relative to the previous iteration.\n\ncut_coef_rng is used to round-off close-to-zero coefficients in generated cuts.\n\nThe separator is any implementing subtype of AbstractKatanaSeparator. It serves as the separation oracle used by the solver. The default is a first order separator that generates a single Newton cut per constraint.\n\nThe features vector is a list of optional features to enable in the solver. Currently supported are\n\n:VisData - Internal model logs actions to be exported and visualised\n\n\n\n"
 },
 
 {
@@ -61,7 +61,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Library",
     "title": "Katana.initialize!",
     "category": "Method",
-    "text": "initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, oracle::MathProgBase.AbstractNLPEvaluator)\n\nInitialise an instance of a subtype of AbstractKatanaSeparator. This method is called by loadproblem! and MUST be overridden. linear_model is the internal linear model of the KatanaNonlinearModel.\n\nnum_var is the number of solution variables, as passed by Katana. num_constr is the number of constraints in the problem, as passed by Katana. See solver implementation documentation for details.\n\noracle can be queried for first- and second- derivative information and must be initialised in this method (see MathProgBase documentation on nonlinear models).\n\n\n\n"
+    "text": "initialize!(sep::AbstractKatanaSeparator, linear_model, num_var, num_constr, oracle::MathProgBase.AbstractNLPEvaluator)\n\nInitialise an instance of a subtype of AbstractKatanaSeparator with information about the KatanaNonlinearModel. This method is called by loadproblem! and MUST be overridden.\n\nlinear_model is the internal linear model of the KatanaNonlinearModel.\n\nnum_var is the number of solution variables, as passed by Katana. num_constr is the number of constraints in the problem, as passed by Katana. See solver implementation for details.\n\noracle can be queried for first- and second- derivative information and must be initialised in this method (see MathProgBase documentation on nonlinear models).\n\n\n\n"
 },
 
 {
@@ -85,15 +85,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Library",
     "title": "Katana.KatanaNonlinearModel",
     "category": "Type",
-    "text": "docs go here\n\n\n\n"
+    "text": "The MathProgBase non-linear model for Katana.\n\n\n\n"
 },
 
 {
-    "location": "library.html#Katana.gencut-Tuple{Katana.AbstractKatanaSeparator,Any,Any}",
+    "location": "library.html#Katana.gencut-Tuple{Katana.AbstractKatanaSeparator,Any,Any,Any}",
     "page": "Library",
     "title": "Katana.gencut",
     "category": "Method",
-    "text": "gencut!(sep::AbstractKatanaSeparator, xstar, i)\n\nGenerate a cut given an LP solution xstar for constraint i. This method MUST be overridden for a subtype of AbstractKatanaSeparator.\n\nReturn a JuMP.AffExpr object.\n\n\n\n"
+    "text": "gencut!(sep::AbstractKatanaSeparator, xstar, i)\n\nGenerate a cut given an LP solution xstar for constraint i. bounds is a 2-tuple of (lb,ub). Since constraints are convex, one of the tuple bounds will be finite, and defines the level set of the constraint function. This method MUST be overridden for a subtype of AbstractKatanaSeparator. It is called by Katana as part of the solve routine.\n\nReturn a JuMP.AffExpr object.\n\n\n\n"
 },
 
 {
@@ -109,7 +109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Library",
     "title": "Katana.numcuts",
     "category": "Method",
-    "text": "numcuts(m::KatanaNonlinearModel)\n\nReturns the number of cuts added to the model\n\n\n\n"
+    "text": "numcuts(m::KatanaNonlinearModel)\n\nReturns the number of linear cuts added to the model. Includes linear constraints initially present.\n\n\n\n"
 },
 
 {
