@@ -66,6 +66,11 @@ end
 
 # add a cut to the internal LP
 function _addcut(m::KatanaNonlinearModel, cut::AffExpr, lb::Float64, ub::Float64)
+    if !isempty(filter(x -> isfinite(x), cut.coeffs))
+        Base.warn("Nonlinear constraint or objective likely undefined within domain")
+        m.status = :Error
+        return
+    end
     c = cut.constant
     newconstr = LinearConstraint(cut, lb-c, ub-c)
     cref = JuMP.addconstraint(m.linear_model, newconstr) # add this cut to the LP
@@ -230,6 +235,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
         ray = MathProgBase.getunboundedray(mpb_lp)
         m.params.log_level > 0 && println("Unbounded ray along: $ray")
         boundroutine(m, ray) # bound along unbounded ray of LP
+        m.status == :Error && return m.status
         status = solve(m.linear_model,suppress_warnings=true)
         i += 1
     end
@@ -268,6 +274,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
                 cut = gencut(m.params.separator, xstar, (m.l_constr[i], m.u_constr[i]), i)
                 round_coefs(cut, m.params.cut_coef_rng)
                 _addcut(m, cut, m.l_constr[i], m.u_constr[i])
+                m.status == :Error && return m.status
                 cuts_viol += 1
             end
 
