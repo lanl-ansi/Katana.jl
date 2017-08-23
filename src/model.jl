@@ -66,7 +66,7 @@ end
 
 # add a cut to the internal LP
 function _addcut(m::KatanaNonlinearModel, cut::AffExpr, lb::Float64, ub::Float64)
-    if !isempty(filter(x -> isfinite(x), cut.coeffs))
+    if !isempty(filter(x -> !isfinite(x), cut.coeffs))
         Base.warn("Nonlinear constraint or objective likely undefined within domain")
         m.status = :Error
         return
