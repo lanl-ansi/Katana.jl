@@ -157,6 +157,7 @@ function MathProgBase.loadproblem!(
             Base.warn("Problem variables insufficiently bounded!")
         else
             push!(vertex, MathProgBase.eval_f(d, vertex))
+            precompute!(fsep, vertex)
             cut = gencut(fsep, vertex, (l_obj, u_obj), m.num_constr)
             round_coefs(cut, m.params.cut_coef_rng)
             _addcut(m, cut, l_obj, u_obj)
