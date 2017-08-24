@@ -17,6 +17,22 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "index.html#Example-use-1",
+    "page": "Home",
+    "title": "Example use",
+    "category": "section",
+    "text": "Katana can be used as a solver within a JuMP model. Consider the following non-linear program:using Katana, JuMP, GLPKMathProgInterface\n\n# use Katana with default parameters and GLPK as internal LP solver\nkatana = KatanaSolver(GLPKSolverLP())\n\nm = Model(solver=katana)\n\n# square-root cone constraint, non-linear constraint intersection example:\n@variable(m, x, start=0.1)\n@variable(m, y, start=0.1)\n@variable(m, z)\n\n@objective(m, Min, x+y)\n@NLconstraint(m, sqrt(x^2 + y^2) <= z-0.25)\n@constraint(m, x^2 + y^2 <= -z + 1)\n\nsolve(m)For details on solver parameters, see the Library documentation."
+},
+
+{
+    "location": "index.html#Customising-Katana-for-your-use-case-1",
+    "page": "Home",
+    "title": "Customising Katana for your use case",
+    "category": "section",
+    "text": "Katana is designed with modularity in mind. To that end, although the default cutting plane algorithm creates separating hyperplanes by performing a single iteration of Newton-Raphson around the optimal solution found by the linearised model, other separation oracles can be substituted through Katana's Separators API.In addition, you may see benefits to substituting a proprietary linear solver (e.g. Gurobi) for improved stability and speed.Katana appears to also be well-suited for computing decently tight lower bounds on non-linear objective functions. By specifying the obj_eps parameter to the KatanaSolver, you can control the solver's stopping criterion to be a 'good enough' objective value."
+},
+
+{
     "location": "library.html#",
     "page": "Library",
     "title": "Library",
