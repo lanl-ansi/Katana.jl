@@ -109,7 +109,7 @@ function MathProgBase.loadproblem!(
     #  the original linear objective as a constraint
     fsep = KatanaFirstOrderSeparator() # with default algo
     epi_d = EpigraphNLPEvaluator(d, num_var+1, num_constr+1) # wrap d
-    initialize!(fsep, m.linear_model, num_var+1, num_constr+1, m.params.f_tol, epi_d)
+    initialize!(fsep, m.linear_model, num_var+1, num_constr+1, epi_d)
     pt = zeros(num_var+1)
     precompute!(fsep, pt)
     for i=1:num_constr
@@ -169,7 +169,7 @@ function MathProgBase.loadproblem!(
 
     # initialise the AbstractKatanaSeparator passed to the model
     sep = m.params.separator
-    initialize!(sep, m.linear_model, m.num_var, m.num_constr, m.params.f_tol, d)
+    initialize!(sep, m.linear_model, m.num_var, m.num_constr, d)
 end
 
 function boundroutine(m::KatanaNonlinearModel, ray)
@@ -183,7 +183,7 @@ function boundroutine(m::KatanaNonlinearModel, ray)
         allsat = true
         precompute!(m.params.separator, x)
         for i in m.nlconstr_ixs
-            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
+            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
             if !sat
                 cut = gencut(m.params.separator, x, (m.l_constr[i], m.u_constr[i]), i)
                 round_coefs(cut, m.params.cut_coef_rng)
@@ -270,7 +270,7 @@ function MathProgBase.optimize!(m::KatanaNonlinearModel)
 
         cuts_viol = 0
         for i in m.nlconstr_ixs # iterate only over NL constraints, possibly including epigraph constraint
-            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i])
+            sat = isconstrsat(m.params.separator, i, m.l_constr[i], m.u_constr[i], m.params.f_tol)
             if !sat # if constraint not satisfied, call separator API to generate the cut
                 cut = gencut(m.params.separator, xstar, (m.l_constr[i], m.u_constr[i]), i)
                 round_coefs(cut, m.params.cut_coef_rng)
