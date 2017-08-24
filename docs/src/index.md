@@ -2,7 +2,7 @@
 
 Katana.jl is a MathProgBase solver for Convex NonLinearPrograms (NLPs).  Katana.jl solves NLPs via the [Extended Cutting-Plane (ECP)](http://epubs.siam.org/doi/10.1137/0108053) method, which combines an Linear Programming solver with a cutting-plane generator to solve Convex NLPs.  Katana.jl is well suited for large-scale Convex NLPs where most of the constraints are linear and the nonlinear constraints are sparse.
 
-### Example use
+#### Example use
 
 Katana can be used as a solver within a JuMP model. Consider the following non-linear program:
 
@@ -26,9 +26,9 @@ m = Model(solver=katana)
 solve(m)
 ```
 
-For details on solver parameters, see the [Library documentation](https://lanl-ansi.github.io/Katana.jl/latest/library.html).
+For details on solver parameters, see the [Library documentation](library.html#Katana.KatanaSolver-Tuple{MathProgBase.SolverInterface.AbstractMathProgSolver}).
 
-### Customising Katana for your use case
+## Customising Katana for your use case
 
 Katana is designed with modularity in mind. To that end, although the [default cutting plane algorithm](https://github.com/lanl-ansi/Katana.jl/blob/master/src/algorithms.jl) creates separating hyperplanes by performing a single iteration of [Newton-Raphson](https://en.wikipedia.org/wiki/Newton%27s_method) around the optimal solution found by the linearised model, other separation oracles can be substituted through Katana's [Separators API](https://github.com/lanl-ansi/Katana.jl/blob/master/src/separators.jl).
 
@@ -36,3 +36,4 @@ In addition, you may see benefits to substituting a proprietary linear solver (e
 
 Katana appears to also be well-suited for computing decently tight lower bounds on non-linear objective functions. By specifying the `obj_eps` parameter to the `KatanaSolver`, you can control the solver's stopping criterion to be a 'good enough' objective value.
 
+Consult the [User Manual](manual.html) for more.

@@ -2,6 +2,9 @@ export AbstractKatanaSeparator, KatanaFirstOrderSeparator, initialize!, precompu
 
 using Compat
 
+"""
+See the [User Manual](manual.html#Implementing-Custom-Separators-1) for an explanation of the motivation behind this class.
+"""
 @compat abstract type AbstractKatanaSeparator end
 
 """

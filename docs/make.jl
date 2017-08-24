@@ -6,9 +6,9 @@ makedocs(
     sitename = "Katana",
     pages = [
         "Home" => "index.md",
-        "Manual" => [],
-        "Library" => "library.md",
-        "Developer" => []
+        "Manual" => "manual.md",
+#        "Developer" => [],
+        "Library" => "library.md"
     ]
 )
 
