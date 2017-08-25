@@ -57,6 +57,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "manual.html#Visualising-linear-cuts-1",
+    "page": "Manual",
+    "title": "Visualising linear cuts",
+    "category": "section",
+    "text": "KatanaNonlinearModel provides a method to retrieve every linear cut generated during the solve process, as well as incremental LP solution vectors. Enable this feature by including :VisData in the list of features passed to KatanaSolver. Retrieve this information by calling getKatanaCuts and getKatanaSols respectively. See the library documentation for details.An example approach to visualisation is provided here. Note that this script has external dependencies."
+},
+
+{
     "location": "manual.html#Expressing-models-in-JuMP-for-better-performance-with-Katana-1",
     "page": "Manual",
     "title": "Expressing models in JuMP for better performance with Katana",
