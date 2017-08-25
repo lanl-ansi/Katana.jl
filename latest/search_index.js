@@ -29,7 +29,39 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Customising Katana for your use case",
     "category": "section",
-    "text": "Katana is designed with modularity in mind. To that end, although the default cutting plane algorithm creates separating hyperplanes by performing a single iteration of Newton-Raphson around the optimal solution found by the linearised model, other separation oracles can be substituted through Katana's Separators API.In addition, you may see benefits to substituting a proprietary linear solver (e.g. Gurobi) for improved stability and speed.Katana appears to also be well-suited for computing decently tight lower bounds on non-linear objective functions. By specifying the obj_eps parameter to the KatanaSolver, you can control the solver's stopping criterion to be a 'good enough' objective value."
+    "text": "Katana is designed with modularity in mind. To that end, although the default cutting plane algorithm creates separating hyperplanes by performing a single iteration of Newton-Raphson around the optimal solution found by the linearised model, other separation oracles can be substituted through Katana's Separators API.In addition, you may see benefits to substituting a proprietary linear solver (e.g. Gurobi) for improved stability and speed.Katana appears to also be well-suited for computing decently tight lower bounds on non-linear objective functions. By specifying the obj_eps parameter to the KatanaSolver, you can control the solver's stopping criterion to be a 'good enough' objective value.Consult the User Manual for more."
+},
+
+{
+    "location": "manual.html#",
+    "page": "Manual",
+    "title": "Manual",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "manual.html#Katana-User-Manual-1",
+    "page": "Manual",
+    "title": "Katana User Manual",
+    "category": "section",
+    "text": "A more in-depth guide on customising, tweaking and extending Katana."
+},
+
+{
+    "location": "manual.html#Implementing-Custom-Separators-1",
+    "page": "Manual",
+    "title": "Implementing Custom Separators",
+    "category": "section",
+    "text": "The Separator API is intended to abstract the logic of generating separating hyperplanes into two parts:What stateful information is required? For example, the KatanaFirstOrderSeparator stores evaluated constraint values, evaluated constraint Jacobians, Jacobian sparsity structure, etc.\nHow is that information used to generate the cutting plane? In the default Newton-based algorithm, the hyperplane is constructed as a first-order expansion around a point.Implementing a custom separator requires a distinction between the _information_ required and the _method_ used. It may not be necessary to create a new subclass of AbstractKatanaSeparator if, for example, the separation oracle only intends to use first-order information. Consider a method of generating cutting planes that involves starting at the LP optimal point x^* and performing gradient descent until within some epsilon of the constraint surface. Ideally, this would require another function that can be used as the algo of a KatanaFirstOrderSeparator.On the other hand, if the custom separator requires second-order constraint values, such as the Hessian, it would be necessary to implement a new subclass of AbstractKatanaSeparator. It is then up to that implementation if the actual algorithm called by gencut is itself modular."
+},
+
+{
+    "location": "manual.html#Expressing-models-in-JuMP-for-better-performance-with-Katana-1",
+    "page": "Manual",
+    "title": "Expressing models in JuMP for better performance with Katana",
+    "category": "section",
+    "text": "TODO."
 },
 
 {
@@ -38,6 +70,14 @@ var documenterSearchIndex = {"docs": [
     "title": "Library",
     "category": "page",
     "text": ""
+},
+
+{
+    "location": "library.html#Katana.AbstractKatanaSeparator",
+    "page": "Library",
+    "title": "Katana.AbstractKatanaSeparator",
+    "category": "Type",
+    "text": "See the User Manual for an explanation of the motivation behind this class.\n\n\n\n"
 },
 
 {
