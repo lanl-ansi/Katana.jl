@@ -18,6 +18,13 @@ function that can be used as the `algo` of a `KatanaFirstOrderSeparator`.
 
 On the other hand, if the custom separator requires second-order constraint values, such as the Hessian, it would be necessary to implement a new subclass of `AbstractKatanaSeparator`. It is then up to that implementation if the actual algorithm called by `gencut` is itself modular.
 
+## Visualising linear cuts
+
+`KatanaNonlinearModel` provides a method to retrieve every linear cut generated during the solve process, as well as incremental LP solution vectors. Enable this feature by including `:VisData` in the list of features passed to `KatanaSolver`. Retrieve this information by calling
+`getKatanaCuts` and `getKatanaSols` respectively. See the [library documentation](library.html#Katana.getKatanaCuts-Tuple{Katana.KatanaNonlinearModel}) for details.
+
+An example approach to visualisation is provided [here](https://github.com/lanl-ansi/Katana.jl/blob/master/vis/vis.jl). Note that this script has external dependencies.
+
 ## Expressing models in JuMP for better performance with Katana
 
 TODO.
